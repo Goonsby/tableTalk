@@ -4,15 +4,15 @@ An Android starter for a pastor and a Spanish-speaking visitor to share one phon
 
 **Current status:** both signed Android test APKs have been built and passed lint with no errors. The offline APK's permissions, both signatures, ARM64 native libraries, and JNI exports have been verified. The prototype has not been installed or tested on an LG G6/G7 and needs device validation before a visit. See [verification](docs/verification.md).
 
-Follow [the APK installation guide](docs/apk-installation.md) for the setup APK, offline APK, and verified multilingual Whisper tiny model. The `downloads/` directory contains public downloads that work without a GitHub account. Build tools, private signing keys, and downloaded dependencies are excluded from this source repository.
+Follow [the APK installation guide](docs/apk-installation.md) for the setup APK, offline APK, and verified multilingual Whisper tiny model. The public GitHub Release contains both APKs and the verified speech model; downloads work without a GitHub account. Build tools, private signing keys, and downloaded dependencies are excluded from this source repository.
 
 ## Download onto the phone
 
 Public downloads require no GitHub login:
 
-1. [Setup APK](https://raw.githubusercontent.com/Goonsby/tableTalk/main/downloads/tabletalk-setup.apk) — install first.
-2. [Whisper tiny speech model](https://raw.githubusercontent.com/Goonsby/tableTalk/main/downloads/ggml-tiny.bin) — import in TableTalk, then choose **Download Spanish over Wi-Fi**.
-3. [Offline visit APK](https://raw.githubusercontent.com/Goonsby/tableTalk/main/downloads/tabletalk-offline.apk) — install over setup without uninstalling or clearing data.
+1. [Setup APK](https://github.com/Goonsby/tableTalk/releases/download/v0.1.0-test/tabletalk-setup.apk) — install first.
+2. [Whisper tiny speech model](https://github.com/Goonsby/tableTalk/releases/download/v0.1.0-test/ggml-tiny.bin) — import in TableTalk, then choose **Download Spanish over Wi-Fi**.
+3. [Offline visit APK](https://github.com/Goonsby/tableTalk/releases/download/v0.1.0-test/tabletalk-offline.apk) — install over setup without uninstalling or clearing data.
 
 See [the installation guide](docs/apk-installation.md). Test both speaking directions in airplane mode with Wi-Fi off before a visit. These are initial test builds, not yet validated on an LG handset.
 
