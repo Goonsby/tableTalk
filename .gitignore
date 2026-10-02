@@ -1,0 +1,15 @@
+.gradle/
+.idea/
+local.properties
+**/build/
+**/.cxx/
+/third_party/
+/models/
+*.apk
+*.aab
+*.jks
+*.keystore
+gradle/wrapper/gradle-wrapper.jar
+/.tooling/
+__pycache__/
+/artifacts/

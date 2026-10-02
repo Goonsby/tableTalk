@@ -1,0 +1,35 @@
+name: Android starter checks
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android components
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
+      - name: Check core behavior
+        run: sh scripts/check_core.sh
+      - name: Prepare pinned dependencies
+        run: python3 scripts/bootstrap.py
+      - name: Build and lint both variants
+        run: sh gradlew :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug
+      - name: Check offline APK permissions
+        run: python3 scripts/check_apk_permissions.py --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" app/build/outputs/apk/offline/debug/app-offline-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tabletalk-debug-apks
+          path: app/build/outputs/apk/*/debug/*.apk

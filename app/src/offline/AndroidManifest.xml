@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Remove permissions contributed by dependencies as well as our manifests. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- Passive network-state queries may be used by the model SDK. This does
+         not allow sockets or internet access; INTERNET is removed above. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+</manifest>
