@@ -6,9 +6,9 @@ For an LG G6/G7 with Android 7.0 or newer and a 64-bit ARM OS. The builds have p
 
 These public links work without signing in to GitHub:
 
-- [Setup APK](https://github.com/Goonsby/tableTalk/releases/download/v0.1.0-test/tabletalk-setup.apk)
-- [Whisper tiny speech model](https://github.com/Goonsby/tableTalk/releases/download/v0.1.0-test/ggml-tiny.bin)
-- [Offline visit APK](https://github.com/Goonsby/tableTalk/releases/download/v0.1.0-test/tabletalk-offline.apk)
+- [Setup APK](https://raw.githubusercontent.com/Goonsby/tableTalk/main/downloads/tabletalk-setup.apk)
+- [Whisper tiny speech model](https://raw.githubusercontent.com/Goonsby/tableTalk/main/downloads/ggml-tiny.bin)
+- [Offline visit APK](https://raw.githubusercontent.com/Goonsby/tableTalk/main/downloads/tabletalk-offline.apk)
 
 | File | Purpose |
 | --- | --- |

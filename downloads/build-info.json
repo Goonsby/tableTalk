@@ -1,0 +1,22 @@
+{
+  "tabletalk-setup.apk": {
+    "bytes": 24465251,
+    "sha256": "7c7b7932592a3834d23356b1bfe196cb4ca161e2977461398c94202d27d8df8b",
+    "signing_certificate_sha256": "48ff6b3901ba617ba372799d03017fb181f04374e209eb11d82b987d9fe704ab",
+    "min_android_api": 24,
+    "abi": "arm64-v8a",
+    "version_code": 1,
+    "lint_errors": 0,
+    "lint_warnings": 13
+  },
+  "tabletalk-offline.apk": {
+    "bytes": 24465227,
+    "sha256": "cf3a5063418e8a633c542218ffd1bae6620c11096d4e50f1003d07a26fced9c1",
+    "signing_certificate_sha256": "48ff6b3901ba617ba372799d03017fb181f04374e209eb11d82b987d9fe704ab",
+    "min_android_api": 24,
+    "abi": "arm64-v8a",
+    "version_code": 2,
+    "lint_errors": 0,
+    "lint_warnings": 13
+  }
+}
