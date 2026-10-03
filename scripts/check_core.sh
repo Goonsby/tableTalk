@@ -8,6 +8,7 @@ java com.sun.tools.javac.Main -source 17 -target 17 -Xlint:-options -d "$CHECK_D
     "$PROJECT_DIR/app/src/main/java/org/tabletalk/core/Language.java" \
     "$PROJECT_DIR/app/src/main/java/org/tabletalk/core/AudioSamples.java" \
     "$PROJECT_DIR/app/src/main/java/org/tabletalk/core/ConversationLedger.java" \
+    "$PROJECT_DIR/app/src/main/java/org/tabletalk/core/TranslationReveal.java" \
     "$PROJECT_DIR/app/src/main/java/org/tabletalk/inference/WhisperEngine.java" \
     "$PROJECT_DIR/app/src/main/java/org/tabletalk/core/VerifiedModelCopy.java" \
     "$PROJECT_DIR/tests/CoreTests.java"

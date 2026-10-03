@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.net.ConnectivityManager;
@@ -14,6 +15,7 @@ import android.widget.CheckBox;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -26,6 +28,9 @@ import org.tabletalk.core.Language;
 import org.tabletalk.inference.TranslationEngine;
 import org.tabletalk.inference.WhisperEngine;
 import org.tabletalk.models.ModelStore;
+import org.tabletalk.ui.CaptionScrollView;
+import org.tabletalk.ui.RevealingTextView;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -300,7 +305,6 @@ public final class MainActivity extends Activity {
         spanishPanel = new Panel(Language.SPANISH);
         // Rotates the WHOLE panel, including buttons and scroll gestures.
         spanishPanel.container.setRotation(180);
-        root.addView(spanishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
         LinearLayout divider = column();
         divider.setPadding(dp(12), dp(5), dp(12), dp(5));
         divider.setBackgroundColor(Color.rgb(229, 236, 228));
@@ -315,12 +319,22 @@ public final class MainActivity extends Activity {
                     demo ? "Ejemplo · micrófono apagado" : "Conversación borrada");
         });
         Button setup = button("Setup", this::showSetup);
-        actions.addView(clear, new LinearLayout.LayoutParams(0, dp(48), 1));
-        actions.addView(setup, new LinearLayout.LayoutParams(0, dp(48), 1));
+        actions.addView(clear, new LinearLayout.LayoutParams(0, -2, 1));
+        actions.addView(setup, new LinearLayout.LayoutParams(0, -2, 1));
         divider.addView(actions);
-        root.addView(divider);
         englishPanel = new Panel(Language.ENGLISH);
-        root.addView(englishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            // Each reader keeps a useful vertical viewport even on a short, wide phone.
+            root.addView(divider);
+            LinearLayout panels = new LinearLayout(this);
+            panels.addView(spanishPanel.container, new LinearLayout.LayoutParams(0, -1, 1));
+            panels.addView(englishPanel.container, new LinearLayout.LayoutParams(0, -1, 1));
+            root.addView(panels, new LinearLayout.LayoutParams(-1, 0, 1));
+        } else {
+            root.addView(spanishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
+            root.addView(divider);
+            root.addView(englishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (demo) addDemo(Language.ENGLISH);
         setStatus(demo ? "Sample layout · microphone off" : "Tap your side to speak",
@@ -329,7 +343,7 @@ public final class MainActivity extends Activity {
     }
     private void speak(Language language) {
         if (!foreground) return;
-        if (demo) { addDemo(language); return; }
+        if (demo) { prepareNextTurn(); addDemo(language); return; }
         if (phase == Phase.RECORDING && speaking == language) {
             phase = Phase.PROCESSING;
             PcmRecorder current = recorder.get();
@@ -352,9 +366,11 @@ public final class MainActivity extends Activity {
             setStatus("Microphone allowed. Tap your side to speak.", "Micrófono permitido. Toque su lado para hablar.");
         } else {
             setStatus("Allow microphone access in Android settings.", "Permita el micrófono en ajustes de Android.");
+            showAttentionStatus();
         }
     }
     private void startCapture(Language language) {
+        prepareNextTurn();
         final long epoch = ledger.epoch();
         final PcmRecorder capture = new PcmRecorder();
         recorder.set(capture);
@@ -366,6 +382,8 @@ public final class MainActivity extends Activity {
                 if (ledger.isCurrent(epoch) && phase == Phase.RECORDING) {
                     setStatus("Listening · " + (AudioSamples.MAX_SECONDS - seconds) + "s left",
                             "Escuchando · quedan " + (AudioSamples.MAX_SECONDS - seconds) + "s");
+                    if (centerStatus != null) centerStatus.setText((AudioSamples.MAX_SECONDS - seconds)
+                            + "s · Listening / Escuchando");
                 }
             }))) {
                 if (!ledger.isCurrent(epoch)) return;
@@ -417,7 +435,7 @@ public final class MainActivity extends Activity {
             ledger.finish(epoch, turnId, translated, false);
             double elapsed = (System.nanoTime() - started) / 1_000_000_000.0;
             finishStatus(epoch, String.format(Locale.ROOT, "Ready · processed in %.1fs", elapsed),
-                    String.format(Locale.ROOT, "Listo · procesado en %.1fs", elapsed));
+                    String.format(Locale.ROOT, "Listo · procesado en %.1fs", elapsed), false);
         } catch (CancellationException cancelled) {
             // Clear/background already invalidated this turn; never restore it.
         } catch (Exception failure) {
@@ -427,15 +445,21 @@ public final class MainActivity extends Activity {
         } finally { Arrays.fill(pcm, 0); }
     }
     private void finishStatus(long epoch, String english, String spanish) {
+        finishStatus(epoch, english, spanish, true);
+    }
+    private void finishStatus(long epoch, String english, String spanish, boolean problem) {
         onUi(() -> {
             if (!ledger.isCurrent(epoch)) return;
             speaking = null;
             phase = Phase.READY;
             setStatus(english, spanish);
+            if (problem) showAttentionStatus();
             render();
         });
     }
     private void cancelAndClear() {
+        if (spanishPanel != null) spanishPanel.stopReveal();
+        if (englishPanel != null) englishPanel.stopReveal();
         ledger.clear();
         PcmRecorder current = recorder.get();
         if (current != null) current.stop();
@@ -444,14 +468,26 @@ public final class MainActivity extends Activity {
         phase = Phase.READY;
         if (spanishPanel != null) render();
     }
+    private void prepareNextTurn() {
+        for (Panel panel : new Panel[]{spanishPanel, englishPanel}) {
+            if (panel == null) continue;
+            panel.stopReveal();
+            panel.followLatest = true;
+            panel.scroll.scrollTo(0, 0);
+        }
+    }
     private void setStatus(String english, String spanish) {
         englishStatus = english;
         spanishStatus = spanish;
-        if (centerStatus != null) centerStatus.setText((demo ? "SAMPLE / EJEMPLO · " : "")
-                + (BuildConfig.ALLOW_MODEL_DOWNLOAD ? "On-device translation · downloads enabled" : "No internet permission"));
+        if (centerStatus != null) centerStatus.setText(demo ? "SAMPLE / EJEMPLO"
+                : phase == Phase.RECORDING ? "Listening / Escuchando"
+                : phase == Phase.PROCESSING ? "Processing / Procesando" : "Ready / Listo");
         if (englishPanel != null) englishPanel.status.setText(english);
         if (spanishPanel != null) spanishPanel.status.setText(spanish);
         updateButtons();
+    }
+    private void showAttentionStatus() {
+        if (centerStatus != null) centerStatus.setText("Please retry / Intente de nuevo");
     }
     private void updateButtons() {
         if (englishPanel == null || spanishPanel == null) return;
@@ -521,46 +557,124 @@ public final class MainActivity extends Activity {
         final LinearLayout container = column();
         final TextView status;
         final LinearLayout captions = column();
-        final ScrollView scroll = new ScrollView(MainActivity.this);
+        final CaptionScrollView scroll = new CaptionScrollView(MainActivity.this);
+        final LinearLayout reading = column();
         final Button talk;
+        final List<RevealingTextView> reveals = new ArrayList<>();
+        List<ConversationLedger.Turn> renderedHistory = new ArrayList<>();
+        boolean followLatest = true;
+        boolean rendered;
+        int renderVersion;
+        Runnable pendingPosition;
+        ViewTreeObserver.OnPreDrawListener pendingLayout;
         Panel(Language language) {
             this.language = language;
-            container.setPadding(dp(18), dp(10), dp(18), dp(10));
+            container.setPadding(dp(14), dp(4), dp(14), dp(4));
+            container.setSaveEnabled(false);
             TextView heading = text(language == Language.SPANISH ? "ESPAÑOL" : "ENGLISH", 15, GREEN);
             heading.setLetterSpacing(0.12f);
-            container.addView(heading);
+            reading.addView(heading);
             status = text(language == Language.SPANISH ? spanishStatus : englishStatus, 13, MUTED);
-            container.addView(status);
-            scroll.addView(captions);
+            reading.addView(status);
+            reading.addView(captions, new LinearLayout.LayoutParams(-1, -2));
+            reading.addView(text(language == Language.SPANISH
+                    ? "Puede haber errores. Deslice para leer."
+                    : "Translation can make mistakes. Scroll to read.", 11, MUTED));
+            scroll.addView(reading, new ScrollView.LayoutParams(-1, -2));
+            scroll.setContentDescription(language == Language.SPANISH ? "Conversación en español" : "English conversation");
+            scroll.setOnUserInteraction(() -> {
+                followLatest = false;
+                stopReveal();
+            });
             container.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
             talk = button(language == Language.SPANISH ? "Hablar español" : "Speak English", () -> speak(language));
-            container.addView(talk, new LinearLayout.LayoutParams(-1, dp(56)));
-            container.addView(text(language == Language.SPANISH
-                    ? "Puede haber errores. Pida aclaración."
-                    : "Translation can make mistakes. Ask for clarification.", 11, MUTED));
+            container.addView(talk, new LinearLayout.LayoutParams(-1, -2));
+        }
+        void stopReveal() {
+            renderVersion++;
+            if (pendingPosition != null) scroll.removeCallbacks(pendingPosition);
+            if (pendingLayout != null && scroll.getViewTreeObserver().isAlive()) {
+                scroll.getViewTreeObserver().removeOnPreDrawListener(pendingLayout);
+            }
+            pendingPosition = null;
+            pendingLayout = null;
+            for (RevealingTextView view : reveals) view.finishReveal();
+        }
+        RevealingTextView caption(String value, int size, int color) {
+            RevealingTextView view = new RevealingTextView(MainActivity.this);
+            view.setText(value);
+            view.setTextSize(size);
+            view.setTextColor(color);
+            view.setPadding(0, dp(4), 0, dp(4));
+            captions.addView(view, new LinearLayout.LayoutParams(-1, -2));
+            return view;
         }
         void render(List<ConversationLedger.Turn> history) {
+            if (rendered && renderedHistory.equals(history)) return;
+            stopReveal();
+            final int version = renderVersion;
+            rendered = true;
+            renderedHistory = new ArrayList<>(history);
+            reveals.clear();
             captions.removeAllViews();
             if (history.isEmpty()) {
+                followLatest = true;
+                scroll.scrollTo(0, 0);
                 captions.addView(text(language == Language.SPANISH
                         ? "Hable por turnos, con frases cortas."
                         : "Take turns speaking in short sentences.", 24, INK));
                 return;
             }
+            TextView newestLabel = null;
+            RevealingTextView newestTranslation = null;
+            long newestId = history.get(history.size() - 1).id;
             for (ConversationLedger.Turn turn : history) {
                 String primary = turn.textFor(language);
                 String secondary = turn.textFor(language.other());
-                captions.addView(text(turn.sourceLanguage == language
+                TextView label = text(turn.sourceLanguage == language
                         ? (language == Language.SPANISH ? "Usted dijo" : "You said")
-                        : (language == Language.SPANISH ? "Traducción" : "Translation"), 12, GREEN));
+                        : (language == Language.SPANISH ? "Traducción" : "Translation"), 12, GREEN);
+                captions.addView(label);
                 if (primary == null) primary = turn.translationFailed
                         ? (language == Language.SPANISH ? "No se pudo traducir. Pida que repita." : "Translation unavailable. Please ask them to repeat.")
-                        : (language == Language.SPANISH ? "Traduciendo…" : "Translating…");
-                captions.addView(text(primary, 24, INK));
-                if (secondary != null) captions.addView(text(secondary, 15, MUTED));
+                        : (language == Language.SPANISH ? "Traduciendo." : "Translating.");
+                RevealingTextView primaryView = caption(primary, 24, INK);
+                RevealingTextView secondaryView = secondary == null ? null : caption(secondary, 15, MUTED);
+                if (turn.id == newestId) {
+                    newestLabel = label;
+                    if (turn.translation != null && !turn.translationFailed) {
+                        newestTranslation = turn.sourceLanguage == language ? secondaryView : primaryView;
+                        reveals.add(newestTranslation);
+                    }
+                }
                 space(captions, 10);
             }
-            scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+            final TextView anchor = newestLabel;
+            final RevealingTextView translation = newestTranslation;
+            final boolean receiving = history.get(history.size() - 1).sourceLanguage != language;
+            pendingPosition = () -> {
+                pendingPosition = null;
+                if (version != renderVersion || !foreground || !followLatest) return;
+                // Start at the beginning of the newest turn, never the end of a long translation.
+                scroll.scrollTo(0, captions.getTop() + anchor.getTop());
+                if (translation == null) return;
+                translation.startReveal(() -> {
+                    if (version != renderVersion || !followLatest || !foreground || !receiving) return;
+                    int bottom = captions.getTop() + translation.getTop() + translation.revealedLineBottom();
+                    int viewport = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
+                    if (viewport > 0 && bottom > scroll.getScrollY() + viewport) {
+                        scroll.scrollTo(0, bottom - viewport);
+                    }
+                });
+            };
+            pendingLayout = () -> {
+                scroll.getViewTreeObserver().removeOnPreDrawListener(pendingLayout);
+                pendingLayout = null;
+                Runnable position = pendingPosition;
+                if (position != null) position.run();
+                return true;
+            };
+            scroll.getViewTreeObserver().addOnPreDrawListener(pendingLayout);
         }
     }
 }
