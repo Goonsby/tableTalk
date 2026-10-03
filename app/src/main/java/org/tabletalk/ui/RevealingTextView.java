@@ -1,5 +1,6 @@
 package org.tabletalk.ui;
 
+import android.annotation.SuppressLint;
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
@@ -20,6 +21,7 @@ import android.widget.TextView;
 import org.tabletalk.core.TranslationReveal;
 
 /** Full text and stable wrapping from the outset; only painting is revealed word by word. */
+@SuppressLint("AppCompatCustomView") // The app uses framework Activity and Theme.Material, not AppCompat.
 public final class RevealingTextView extends TextView {
     private final Path revealedPath = new Path();
     private ValueAnimator animator;
@@ -41,9 +43,9 @@ public final class RevealingTextView extends TextView {
         setHorizontallyScrolling(false);
         setSingleLine(false);
         setEllipsize(null);
-        // These compile-time constants are also the values supported by TextView on API 23+.
+        // This compile-time constant is also the value supported by TextView on API 23+.
         setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE);
-        setHyphenationFrequency(LineBreaker.HYPHENATION_FREQUENCY_NONE);
+        setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE);
         setSaveEnabled(false);
         // Accessibility always reads the complete translation, never animation fragments.
         setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_NONE);
