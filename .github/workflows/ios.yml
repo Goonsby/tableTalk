@@ -1,0 +1,101 @@
+name: iPhone checks
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Apple toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Install project generator
+        run: |
+          brew install xcodegen
+          xcodegen --version
+      - name: Test conversation core
+        run: swift test --package-path ios
+      - name: Generate Xcode project
+        run: xcodegen generate --spec ios/project.yml
+      - name: Build unsigned iPhone application
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          xcodebuild -project ios/TableTalk.xcodeproj -scheme TableTalk \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee artifacts/ios-device-build.log
+      - name: Select an available iPhone simulator
+        id: simulator
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "--json"]))["devices"]
+          candidates = [
+              (runtime, device)
+              for runtime, values in devices.items()
+              if "iOS-18-" in runtime
+              for device in values
+              if device["name"].startswith("iPhone") and device.get("isAvailable", False)
+          ]
+          if not candidates:
+              raise SystemExit("No available iOS 18 iPhone simulator in the selected Xcode. See runner image tools.")
+          runtime, device = sorted(candidates, key=lambda item: (item[0], item[1]["name"]))[-1]
+          print(f"Using {device['name']} / {runtime} / {device['udid']}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"udid={device['udid']}\n")
+          PY
+      - name: Test native sample conversation UI
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/TableTalk.xcodeproj -scheme TableTalk \
+            -configuration Debug -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath ios/build/simulator \
+            -resultBundlePath artifacts/TableTalk-UI.xcresult \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee artifacts/ios-simulator-test.log
+      - name: Export UI screenshots
+        if: always()
+        run: |
+          if [ -d artifacts/TableTalk-UI.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path artifacts/TableTalk-UI.xcresult \
+              --output-path artifacts/screenshots
+          fi
+      - name: Package simulator app
+        if: success()
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            ios/build/simulator/Build/Products/Debug-iphonesimulator/TableTalk.app \
+            artifacts/TableTalk-iPhone-Simulator.zip
+      - name: Upload iPhone validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabletalk-iphone-checks
+          path: artifacts/
+          retention-days: 14
