@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare an isolated Android build toolchain and produce both signed debug APKs."""
+"""Prepare an isolated Android build toolchain and produce signed setup/offline debug APKs and the POCO release APK."""
 import hashlib
 import argparse
 import json
@@ -157,6 +157,7 @@ def debug_key():
                         "-storepass", "android", "-keypass", "android", "-alias", "androiddebugkey",
                         "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000",
                         "-dname", "CN=Android Debug,O=Android,C=US"], env=ENV, check=True)
+    path.chmod(0o600)
     ENV["TABLETALK_DEBUG_KEYSTORE"] = str(path)
 
 
@@ -167,8 +168,9 @@ def artifacts():
     signer = SDK / "build-tools/35.0.0/apksigner"
     certs = []
     summary = {}
-    for flavor in ["setup", "offline"]:
-        apk = ROOT / f"app/build/outputs/apk/{flavor}/debug/app-{flavor}-debug.apk"
+    for flavor in ["setup", "offline", "poco"]:
+        build_type = "release" if flavor == "poco" else "debug"
+        apk = ROOT / f"app/build/outputs/apk/{flavor}/{build_type}/app-{flavor}-{build_type}.apk"
         if flavor == "offline":
             subprocess.run([sys.executable, str(ROOT / "scripts/check_apk_permissions.py"),
                             "--aapt", str(aapt), str(apk)], env=ENV, check=True)
@@ -183,10 +185,10 @@ def artifacts():
         summary[name] = {"bytes": destination.stat().st_size,
                          "sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
                          "signing_certificate_sha256": cert}
-    if certs[0] != certs[1]:
+    if len(set(certs)) != 1:
         raise RuntimeError("Setup and offline APKs do not share a signing certificate")
     (output / "build-info.json").write_text(json.dumps(summary, indent=2) + "\n")
-    announce("Both APK signatures verified; offline APK has no INTERNET permission.")
+    announce("All APK signatures verified; offline APK has no INTERNET permission.")
     for name, info in summary.items():
         announce(f"Ready: {output / name} ({info['bytes'] / 1024 / 1024:.1f} MiB)")
 
@@ -204,10 +206,11 @@ if __name__ == "__main__":
         prepare_sdk()
         subprocess.run([sys.executable, str(ROOT / "scripts/bootstrap.py")], cwd=ROOT, env=ENV, check=True)
     debug_key()
-    announce("Building both Android APKs and running lint…")
+    announce("Building Android APKs and running lint…")
     subprocess.run(["sh", str(ROOT / "gradlew"), "--no-daemon", "--console=plain", "--max-workers=2",
                     *(["--offline"] if options.offline else []),
                     ":app:assembleSetupDebug", ":app:assembleOfflineDebug",
-                    ":app:lintSetupDebug", ":app:lintOfflineDebug"], cwd=ROOT, env=ENV, check=True)
+                    ":app:lintSetupDebug", ":app:lintOfflineDebug",
+                    ":app:assemblePocoRelease", ":app:lintPocoRelease"], cwd=ROOT, env=ENV, check=True)
     artifacts()
     announce("Build complete.")

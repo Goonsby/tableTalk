@@ -22,6 +22,18 @@ android {
             dimension = "network"
             buildConfigField("boolean", "ALLOW_MODEL_DOWNLOAD", "true")
         }
+        create("poco") {
+            dimension = "network"
+            applicationIdSuffix = ".poco"
+            minSdk = 26
+            versionCode = 10
+            versionName = "0.2.0-poco"
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("boolean", "ALLOW_MODEL_DOWNLOAD", "true")
+            externalNativeBuild {
+                cmake { arguments += "-DTABLETALK_POCO=ON" }
+            }
+        }
         create("offline") {
             dimension = "network"
             versionCode = 2

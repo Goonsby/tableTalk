@@ -7,6 +7,10 @@ import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.widget.CheckBox;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -28,6 +32,7 @@ import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class MainActivity extends Activity {
     private static final int IMPORT_MODEL = 10;
@@ -38,16 +43,18 @@ public final class MainActivity extends Activity {
     private static final int PAPER = Color.rgb(248, 246, 240);
     private final ConversationLedger ledger = new ConversationLedger();
     private final ExecutorService captureWorker = Executors.newSingleThreadExecutor();
-    private final ExecutorService inferenceWorker = Executors.newSingleThreadExecutor();
+    // Shared serialization prevents overlapping model imports during activity recreation.
+    private static final ExecutorService inferenceWorker = Executors.newSingleThreadExecutor();
     private WhisperEngine whisper;
     private TranslationEngine translator;
     private ModelStore models;
     private LinearLayout root;
     private TextView setupStatus;
+    private CheckBox mobileDownloads;
     private TextView centerStatus;
     private Panel spanishPanel;
     private Panel englishPanel;
-    private volatile PcmRecorder recorder;
+    private final AtomicReference<PcmRecorder> recorder = new AtomicReference<>();
     private volatile boolean destroyed;
     private boolean foreground;
     private boolean ready;
@@ -55,7 +62,6 @@ public final class MainActivity extends Activity {
     private boolean demo;
     private int demoStep;
     private Language speaking;
-    private Language permissionLanguage;
     private Phase phase = Phase.READY;
     private String englishStatus = "Prepare the offline models";
     private String spanishStatus = "Prepare los modelos sin conexión";
@@ -83,6 +89,7 @@ public final class MainActivity extends Activity {
     @Override public void onResume() {
         super.onResume();
         foreground = true;
+        if (setupBusy) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (centerStatus != null) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             setStatus(demo ? "Sample layout · microphone off" : "Tap your side to speak",
@@ -92,7 +99,6 @@ public final class MainActivity extends Activity {
     @Override public void onPause() {
         foreground = false;
         cancelAndClear();
-        permissionLanguage = null;
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         super.onPause();
     }
@@ -102,7 +108,7 @@ public final class MainActivity extends Activity {
         captureWorker.shutdown();
         // Do not free a native context while a cancelled inference is still unwinding.
         inferenceWorker.execute(() -> { whisper.close(); translator.close(); });
-        inferenceWorker.shutdown();
+
         super.onDestroy();
     }
 
@@ -126,16 +132,23 @@ public final class MainActivity extends Activity {
         setupStatus = text(ready ? "Models ready. Test both speaking directions in airplane mode."
                 : "Prepare the offline models before starting.", 16, GREEN);
         content.addView(setupStatus);
-        content.addView(button("1. Import speech model (.bin)", () -> {
+        if (BuildConfig.ALLOW_MODEL_DOWNLOAD) {
+            mobileDownloads = new CheckBox(this);
+            mobileDownloads.setText("Allow mobile data for model downloads");
+            content.addView(mobileDownloads);
+            content.addView(button("Download speech + translation models", this::downloadAllModels));
+            content.addView(text("Recommended for POCO F1: multilingual Whisper tiny (75 MiB), plus Spanish translation. Wi-Fi is the default. Keep this screen open until setup finishes.", 15, MUTED));
+        }
+        content.addView(button("Import speech model (.bin) instead", () -> {
             if (setupBusy) return;
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
             startActivityForResult(intent, IMPORT_MODEL);
         }));
-        content.addView(text("Use ggml-tiny.bin (75 MiB) for an LG G6 or G7. The project guide links the model file.", 15, MUTED));
+        content.addView(text("Whisper tiny uses less memory and processes short turns faster than base. Imported files are checked before replacing your model.", 15, MUTED));
         if (BuildConfig.ALLOW_MODEL_DOWNLOAD) {
-            content.addView(button("2. Download Spanish over Wi-Fi", this::downloadTranslation));
+            content.addView(button("Download translation model only", this::downloadTranslation));
         } else {
             content.addView(text("This visit build has no internet permission. Translation models must already be installed by the setup build.", 16, MUTED));
         }
@@ -149,72 +162,131 @@ public final class MainActivity extends Activity {
         content.addView(text("Conversations stay in memory and clear when you leave the app. Translation can make mistakes; ask for clarification.", 15, MUTED));
     }
 
+    private void setSetupBusy(boolean busy) {
+        setupBusy = busy;
+        if (busy && foreground) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else if (centerStatus == null) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
     private void checkReadiness() {
         if (setupBusy || destroyed) return;
-        setupBusy = true;
+        setSetupBusy(true);
         setupStatus.setText("Checking both translation directions…");
         inferenceWorker.execute(() -> {
+            if (destroyed) return;
+            boolean speechExists = models.exists();
             try {
-                if (!models.exists()) throw new IllegalStateException();
+                if (!speechExists) throw new IllegalStateException();
                 if (!whisper.isOpen()) whisper.open(models.file());
                 translator.probeBothDirections();
                 onUi(() -> {
                     ready = true;
-                    setupBusy = false;
+                    setSetupBusy(false);
                     setupStatus.setText("Models ready. Before a visit, test both speaking directions in airplane mode.");
                 });
             } catch (Exception failure) {
                 onUi(() -> {
                     ready = false;
-                    setupBusy = false;
-                    setupStatus.setText(models.exists()
-                            ? "Translation or speech check failed. Prepare Spanish over Wi-Fi in the setup build, then retry."
-                            : "Import the speech model, then prepare Spanish translation.");
+                    setSetupBusy(false);
+                    setupStatus.setText(speechExists
+                            ? "Model check failed. Download Spanish translation or re-import the speech model, then retry."
+                            : "Download both models, or import a speech model and download Spanish translation.");
                 });
             }
         });
     }
     private void downloadTranslation() {
         if (setupBusy) return;
-        setupBusy = true;
+        setSetupBusy(true);
         ready = false;
-        setupStatus.setText("Downloading Spanish. Keep Wi-Fi connected; this can take a few minutes.");
+        final boolean wifiOnly = !mobileDownloads.isChecked();
+        setupStatus.setText("Downloading Spanish. Keep " + (wifiOnly ? "Wi-Fi" : "internet") + " connected; this can take a few minutes.");
         inferenceWorker.execute(() -> {
             try {
-                translator.prepareForSetup();
+                translator.prepareForSetup(wifiOnly, () -> destroyed);
                 onUi(() -> {
-                    setupBusy = false;
+                    setSetupBusy(false);
                     setupStatus.setText("Spanish is prepared. Checking speech next…");
                     checkReadiness();
                 });
             } catch (Exception failure) {
                 onUi(() -> {
-                    setupBusy = false;
+                    setSetupBusy(false);
                     setupStatus.setText("Download or translation check failed. Check Wi-Fi and free storage, then retry.");
                 });
             }
         });
     }
+    private void downloadAllModels() {
+        if (setupBusy || destroyed) return;
+        final boolean wifiOnly = !mobileDownloads.isChecked();
+        ConnectivityManager connectivity = getSystemService(ConnectivityManager.class);
+        final Network network = connectivity.getActiveNetwork();
+        NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
+        if (capabilities == null || !capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                || (wifiOnly && !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))) {
+            setupStatus.setText(wifiOnly ? "Connect to Wi-Fi, or enable mobile data downloads above."
+                    : "Connect to the internet, then retry.");
+            return;
+        }
+        setSetupBusy(true);
+        ready = false;
+        setupStatus.setText("Downloading verified speech model (75 MiB)…");
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        inferenceWorker.execute(() -> {
+            try {
+                if (!models.exists()) {
+                    whisper.close();
+                    final long[] lastMiB = {-1};
+                    models.downloadTiny(network, () -> destroyed, bytes -> {
+                        long mib = bytes / (1024 * 1024);
+                        if (mib != lastMiB[0]) {
+                            lastMiB[0] = mib;
+                            onUi(() -> setupStatus.setText("Downloading speech model: " + mib + " / 75 MiB…"));
+                        }
+                    });
+                }
+                if (destroyed) return;
+                onUi(() -> setupStatus.setText("Speech model saved. Downloading Spanish translation…"));
+                translator.prepareForSetup(wifiOnly, () -> destroyed);
+                if (destroyed) return;
+                onUi(() -> {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    setSetupBusy(false);
+                    checkReadiness();
+                });
+            } catch (Exception failure) {
+                onUi(() -> {
+                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                    setSetupBusy(false);
+                    setupStatus.setText("Setup did not finish. Check your connection and storage, then retry. "
+                            + "Verified models already saved will be reused. " + failure.getMessage());
+                });
+            }
+        });
+    }
+
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
         if (request != IMPORT_MODEL || result != RESULT_OK || data == null || data.getData() == null) return;
         Uri uri = data.getData();
-        setupBusy = true;
+        setSetupBusy(true);
         ready = false;
         setupStatus.setText("Importing and checking the speech model…");
         inferenceWorker.execute(() -> {
             try {
                 whisper.close();
-                String name = models.importModel(uri);
+                String name = models.importModel(uri, () -> destroyed);
+                if (destroyed) return;
                 whisper.open(models.file());
                 onUi(() -> {
-                    setupBusy = false;
+                    setSetupBusy(false);
                     setupStatus.setText("Imported multilingual " + name + ". Checking translation…");
                     checkReadiness();
                 });
             } catch (Exception failure) {
                 onUi(() -> {
-                    setupBusy = false;
+                    setSetupBusy(false);
                     setupStatus.setText("Import failed. Choose the original ggml-tiny.bin or ggml-base.bin from the guide. English-only and quantized files are not accepted yet.");
                 });
             }
@@ -260,14 +332,13 @@ public final class MainActivity extends Activity {
         if (demo) { addDemo(language); return; }
         if (phase == Phase.RECORDING && speaking == language) {
             phase = Phase.PROCESSING;
-            PcmRecorder current = recorder;
+            PcmRecorder current = recorder.get();
             if (current != null) current.stop();
             setStatus("Processing…", "Procesando…");
             return;
         }
         if (!ready || phase != Phase.READY || setupBusy) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissionLanguage = language;
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MICROPHONE_PERMISSION);
             return;
         }
@@ -276,7 +347,6 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
         if (request != MICROPHONE_PERMISSION) return;
-        permissionLanguage = null;
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             // Tap again: the permission dialog may have paused the activity.
             setStatus("Microphone allowed. Tap your side to speak.", "Micrófono permitido. Toque su lado para hablar.");
@@ -287,7 +357,7 @@ public final class MainActivity extends Activity {
     private void startCapture(Language language) {
         final long epoch = ledger.epoch();
         final PcmRecorder capture = new PcmRecorder();
-        recorder = capture;
+        recorder.set(capture);
         speaking = language;
         phase = Phase.RECORDING;
         setStatus("Listening · tap again to finish", "Escuchando · toque otra vez para terminar");
@@ -319,7 +389,7 @@ public final class MainActivity extends Activity {
             } catch (Exception failure) {
                 finishStatus(epoch, "Microphone unavailable. Please try again.", "Micrófono no disponible. Intente de nuevo.");
             } finally {
-                if (recorder == capture) recorder = null;
+                recorder.compareAndSet(capture, null);
             }
         });
     }
@@ -367,7 +437,7 @@ public final class MainActivity extends Activity {
     }
     private void cancelAndClear() {
         ledger.clear();
-        PcmRecorder current = recorder;
+        PcmRecorder current = recorder.get();
         if (current != null) current.stop();
         if (whisper != null) whisper.cancel();
         speaking = null;
@@ -378,7 +448,7 @@ public final class MainActivity extends Activity {
         englishStatus = english;
         spanishStatus = spanish;
         if (centerStatus != null) centerStatus.setText((demo ? "SAMPLE / EJEMPLO · " : "")
-                + (BuildConfig.ALLOW_MODEL_DOWNLOAD ? "Setup build" : "No internet permission"));
+                + (BuildConfig.ALLOW_MODEL_DOWNLOAD ? "On-device translation · downloads enabled" : "No internet permission"));
         if (englishPanel != null) englishPanel.status.setText(english);
         if (spanishPanel != null) spanishPanel.status.setText(spanish);
         updateButtons();
