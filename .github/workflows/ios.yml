@@ -78,6 +78,14 @@ jobs:
             -resultBundlePath artifacts/TableTalk-UI.xcresult \
             -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO \
             test 2>&1 | tee artifacts/ios-simulator-test.log
+      - name: Export UI screenshots
+        if: always()
+        run: |
+          if [ -d artifacts/TableTalk-UI.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path artifacts/TableTalk-UI.xcresult \
+              --output-path artifacts/screenshots
+          fi
       - name: Package simulator app
         if: success()
         run: |

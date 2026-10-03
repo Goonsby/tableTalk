@@ -12,12 +12,28 @@ final class TableTalkUITests: XCTestCase {
         app.launch()
     }
 
-    private func openSample() {
+    private func revealSampleButton() -> XCUIElement {
         let button = app.buttons["setup.startSample"]
         XCTAssertTrue(button.waitForExistence(timeout: 10))
         for _ in 0..<4 where !button.isHittable { app.swipeUp() }
         XCTAssertTrue(button.isHittable)
-        button.tap()
+        return button
+    }
+
+    private func openSample() {
+        revealSampleButton().tap()
+        XCTAssertTrue(app.staticTexts["demo.label"].waitForExistence(timeout: 5))
+    }
+
+    func testFreshLaunchRequiresSetupAndSampleNeedsNoPermissions() {
+        let sample = revealSampleButton()
+        let realConversation = app.buttons["setup.startConversation"]
+        XCTAssertTrue(realConversation.exists)
+        XCTAssertFalse(realConversation.isEnabled)
+        XCTAssertTrue(sample.isEnabled)
+        // Reaching sample mode without dismissing a system dialog demonstrates
+        // that launch/sample do not trigger microphone or speech permission UI.
+        sample.tap()
         XCTAssertTrue(app.staticTexts["demo.label"].waitForExistence(timeout: 5))
     }
 
@@ -50,5 +66,25 @@ final class TableTalkUITests: XCTestCase {
         app.buttons["conversation.setup"].tap()
         XCTAssertTrue(app.buttons["setup.startSample"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["demo.label"].exists)
+    }
+
+    func testSpanishSampleHasEnglishCounterpart() {
+        openSample()
+        app.buttons["speak.spanish"].tap()
+        XCTAssertEqual(app.staticTexts["caption.source.spanish"].label, "¿Cómo está?")
+        XCTAssertEqual(app.staticTexts["caption.translation.english"].label, "How are you?")
+        XCTAssertTrue(app.staticTexts["demo.label"].exists)
+    }
+
+    func testBackgroundingClearsConversationAndRequiresSetup() {
+        openSample()
+        XCUIDevice.shared.press(.home)
+        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        app.activate()
+        XCTAssertTrue(app.buttons["setup.startSample"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["demo.label"].exists)
+        XCTAssertFalse(app.staticTexts["caption.source.english"].exists)
+        XCTAssertFalse(app.staticTexts["caption.translation.spanish"].exists)
+        XCTAssertFalse(app.buttons["setup.startConversation"].isEnabled)
     }
 }
