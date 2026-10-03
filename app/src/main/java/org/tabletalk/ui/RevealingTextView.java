@@ -7,6 +7,7 @@ import android.content.Context;
 import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Path;
+import android.graphics.text.LineBreaker;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -40,8 +41,9 @@ public final class RevealingTextView extends TextView {
         setHorizontallyScrolling(false);
         setSingleLine(false);
         setEllipsize(null);
-        setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE);
-        setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NONE);
+        // These compile-time constants are also the values supported by TextView on API 23+.
+        setBreakStrategy(LineBreaker.BREAK_STRATEGY_SIMPLE);
+        setHyphenationFrequency(LineBreaker.HYPHENATION_FREQUENCY_NONE);
         setSaveEnabled(false);
         // Accessibility always reads the complete translation, never animation fragments.
         setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_NONE);
