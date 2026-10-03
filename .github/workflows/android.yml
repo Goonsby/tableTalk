@@ -19,6 +19,9 @@ jobs:
         with:
           python-version: '3.11'
       - uses: android-actions/setup-android@v3
+        with:
+          # The default includes the retired SDK tools package.
+          packages: platform-tools
       - name: Install Android components
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
       - name: Check core behavior
