@@ -1,8 +1,8 @@
 # TableTalk
 
-## Pocophone F1 edition (0.2.0)
+## Pocophone F1 edition (0.2.0 test build)
 
-[**Download the POCO F1 APK**](https://github.com/Goonsby/tableTalk/releases/download/v0.2.0-poco/tabletalk-poco.apk). Install it and tap **Download speech + translation models**. One app downloads the models and then transcribes/translates on the phone, including offline. Wi-Fi is the default; mobile data is optional.
+Install `tabletalk-poco.apk` delivered with this build and tap **Download speech + translation models**. One app downloads the models and then transcribes/translates on the phone, including offline. Wi-Fi is the default; mobile data is optional. The POCO APK is built into `artifacts/`; it is not yet published as a GitHub release.
 
 This ARM64 build is tuned for the Snapdragon 845, uses multilingual Whisper tiny, and installs alongside the older test app. See the [POCO setup and verification guide](docs/pocophone-f1.md). Device performance and MIUI behavior still need a physical F1 test.
 
@@ -58,11 +58,19 @@ python3 scripts/bootstrap.py
 sh gradlew :app:assembleSetupDebug :app:assembleOfflineDebug
 ```
 
+On Windows, the following builds and checks all three variants, including the signed POCO APK:
+
+```powershell
+.\scripts\build_windows.ps1 -SdkPath "$env:LOCALAPPDATA\Android\Sdk"
+```
+
+Use your actual SDK directory. The script uses JDK 17 from `PATH`, prepares the pinned Whisper/Gradle dependencies, runs core checks and lint, and verifies signatures and APK alignment. Pass `-GradlePath` to reuse an existing Gradle 8.11.1 `gradle.bat` installation. Keep the generated `.tooling/android-user/debug.keystore` private for compatible future updates.
+
 Bootstrap fetches whisper.cpp **v1.7.6**, verifies commit `a8d002cfd879315632a579e73f0148d06959de36`, and prepares Gradle **8.11.1** with a checked distribution checksum. `gradlew` is a small launcher for that distribution; this starter does not include a wrapper JAR. Internet is required on the development computer to fetch source, SDK components, and Maven dependencies.
 
-Native compilation uses the ARMv8-A baseline for G6 compatibility. Accelerated ARMv8.2 builds and GPU inference are not enabled. The initial APK supports `arm64-v8a` only, including ARM64 emulators.
+Setup/offline native compilation uses the ARMv8-A baseline for G6 compatibility. The POCO variant selects ARMv8.2-A FP16 for the Snapdragon 845. GPU inference is not enabled. The APKs support `arm64-v8a` only.
 
-Native code uses `-O3` even in these signed debug APKs, so debug compilation does not unnecessarily slow inference. On a managed Linux x64 workspace, `python3 scripts/build_android.py` can provision the JDK/SDK and build both APKs with Python 3.12+. Its output is placed in `artifacts/`. Preserve `.tooling/android-user/debug.keystore` privately to sign compatible future test updates; it is not included in downloads.
+Native code uses `-O3` even in the signed debug APKs, so debug compilation does not unnecessarily slow inference. On a managed Linux x64 workspace, `python3 scripts/build_android.py` can provision the JDK/SDK and build all three APKs with Python 3.12+. Its output is placed in `artifacts/`. Preserve `.tooling/android-user/debug.keystore` privately to sign compatible future test updates; it is not included in downloads.
 
 For Android Studio import, open this directory and select the local Gradle distribution at `.tooling/gradle-8.11.1` after bootstrap, with JDK 17. Alternatively, use the command-line build above.
 

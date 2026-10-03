@@ -40,8 +40,8 @@ android {
             buildConfigField("boolean", "ALLOW_MODEL_DOWNLOAD", "false")
         }
     }
-    // Both flavors intentionally use the same application ID and signing key.
-    // Install offline over setup with -r so downloaded models survive.
+    // Setup/offline share an application ID for in-place provisioning updates.
+    // POCO has its own ID and keeps network access for future model setup.
     buildFeatures { buildConfig = true }
     signingConfigs.getByName("debug") {
         // Cloud builds keep their development key inside the writable workspace.

@@ -1,6 +1,6 @@
 # TableTalk for Xiaomi POCOPHONE F1
 
-Install [tabletalk-poco.apk](https://github.com/Goonsby/tableTalk/releases/download/v0.2.0-poco/tabletalk-poco.apk), then open TableTalk and tap **Download speech + translation models**. Wi-Fi is the default; check **Allow mobile data for model downloads** if desired. The multilingual Whisper tiny model is approximately 75 MiB; Spanish translation is a separate download. Leave the setup screen open until both directions pass the readiness check. If interrupted, retry: completed models are reused, while incomplete speech downloads restart safely.
+Install `tabletalk-poco.apk` supplied with this build, then open TableTalk and tap **Download speech + translation models**. The APK is generated at `artifacts/tabletalk-poco.apk`; the POCO edition has not yet been published as a GitHub release. Wi-Fi is the default; check **Allow mobile data for model downloads** if desired. The multilingual Whisper tiny model is approximately 75 MiB; Spanish translation is a separate download. Leave the setup screen open until both directions pass the readiness check. If interrupted, retry: completed models are reused, while incomplete speech downloads restart safely.
 
 The app records and transcribes speech and translates English ↔ Spanish on the phone. Internet access is retained for model setup; no second APK is necessary. Test both directions in airplane mode with Wi-Fi off. The Google ML Kit SDK may use its own networking for model management and diagnostics when online; this build does not enforce the network isolation of the old offline variant.
 
@@ -23,7 +23,11 @@ The private key is retained locally at `.tooling/android-user/debug.keystore` an
 
 ## Verification and remaining device checks
 
-Automated validation covers core conversation behavior and model transfer integrity; build/lint and APK inspection results are recorded in the release notes. No Pocophone F1 was attached to the build computer, so speech quality, latency, temperature, microphone behavior, and MIUI download behavior still require a handset test. No performance multiplier is claimed.
+On October 2, 2026, the recovered implementation was compiled in an isolated Linux build directory on minibeaux. All three variants built successfully. The 30 core checks passed; Android lint reported zero errors and 25 warnings per variant (ChromeOS ABI support, inline UI strings, and usable-space handling). The packaged ARM64 libraries and five Whisper JNI exports were inspected, including the POCO FP16 compiler setting.
+
+The delivered POCO APK was signed with the retained Windows development key. Its signature and 16 KiB ZIP alignment passed verification, and its packaged content matches the Linux build. Package/version, Android API levels, permissions, and disabled debugging were checked in the final APK. SHA-256: `0097a45a834c1834886f6641468936551790fe4409d057bdbef8e297cfc77f86`. Build metadata and checksums accompany it in `artifacts/`.
+
+An API 35 emulator with ARM64 translation booted, but its Android package service failed during installation (`DEAD_OBJECT` / broken pipe). App startup and model downloads were therefore not verified on the emulator. No Pocophone F1 was attached; speech quality, latency, temperature, microphone behavior, and MIUI download behavior still require a handset test. No performance multiplier is claimed. The Windows build helper passed syntax checking and its core-test stage; the completed APK build used Linux after Windows filesystem access proved too slow.
 
 On the phone:
 
@@ -37,5 +41,7 @@ On the phone:
 ## Build
 
 `python3 scripts/build_android.py` provisions the toolchain, builds all three variants and runs lint. The POCO APK is placed at `artifacts/tabletalk-poco.apk`. For a prepared environment, use `--rebuild-only`.
+
+On Windows, install the SDK components listed in the README, put JDK 17 on `PATH`, then run `scripts/build_windows.ps1 -SdkPath <your-sdk-directory>`. It builds all three variants, runs core tests and lint, verifies signatures/alignment, checks offline permissions, and writes the APKs and checksums to `artifacts/`.
 
 Direct Gradle tasks: `:app:assemblePocoRelease :app:lintPocoRelease`. The POCO flavor uses the configured development signing key even for its non-debuggable release build. Set `TABLETALK_DEBUG_KEYSTORE` to the preserved key for reproducible update signing.

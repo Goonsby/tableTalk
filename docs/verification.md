@@ -1,5 +1,7 @@
 # Build verification
 
+This section records the original two-APK build. For the recovered POCO edition and its October 2, 2026 build, signing checks, and remaining handset checks, see [pocophone-f1.md](pocophone-f1.md#verification-and-remaining-device-checks). Current delivery metadata is in `artifacts/build-info.json`.
+
 Checked October 2, 2026. Both Android test APKs were successfully built in this workspace. No physical phone or Android emulator was used.
 
 ## Completed
@@ -25,4 +27,4 @@ An upstream ggml ARM-feature display probe emits a nonfatal host-target diagnost
 - Android permissions, lifecycle transitions, screenshot blocking, and physical table accessibility.
 - Confirmation of the building's device and microphone rules.
 
-See [device-testing.md](device-testing.md). These are development test builds, not a validated interpreter or a published release. No remote repository or store listing was created.
+See [device-testing.md](device-testing.md). These are development test builds, not a validated interpreter. The original APKs were subsequently published in the [v0.1.0-test GitHub release](https://github.com/Goonsby/tableTalk/releases/tag/v0.1.0-test). The POCO edition is delivered separately; no Play Store listing was created.
