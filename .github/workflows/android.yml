@@ -29,7 +29,7 @@ jobs:
       - name: Prepare pinned dependencies
         run: python3 scripts/bootstrap.py
       - name: Build and lint all variants
-        run: sh gradlew :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug :app:assemblePocoRelease :app:lintPocoRelease
+        run: sh gradlew :app:testPocoDebugUnitTest :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug :app:assemblePocoRelease :app:lintPocoRelease
       - name: Check offline APK permissions
         run: python3 scripts/check_apk_permissions.py --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" app/build/outputs/apk/offline/debug/app-offline-debug.apk
       - uses: actions/upload-artifact@v4

@@ -4,7 +4,9 @@
 
 [**Download the POCO F1 APK**](https://github.com/Goonsby/tableTalk/releases/download/v0.2.0-poco/tabletalk-poco.apk), install it, and tap **Download speech + translation models**. One app downloads the models and then transcribes/translates on the phone, including offline. Wi-Fi is the default; mobile data is optional. Checksums and build metadata accompany the APK in the [0.2.0 POCO prerelease](https://github.com/Goonsby/tableTalk/releases/tag/v0.2.0-poco).
 
-This ARM64 build is tuned for the Snapdragon 845, uses multilingual Whisper tiny, and installs alongside the older test app. See the [POCO setup and verification guide](docs/pocophone-f1.md). Device performance and MIUI behavior still need a physical F1 test.
+This ARM64 build is tuned for the Snapdragon 845, uses multilingual Whisper tiny, and installs alongside the older test app. See the [POCO setup and verification guide](docs/pocophone-f1.md). The user reports that the latest Android build works well. Device performance measurements and specific MIUI/offline conditions remain separate checks.
+
+The `codex/android-caption-reveal` branch contains a [translation-reveal preview](docs/android-caption-reveal.md), version `0.2.1-poco-preview` / code 11. It adds gradual captions and improved long-text scrolling. The public download above remains the original 0.2.0 build; no new release is published by this preview.
 
 ## Original LG prototype (0.1.0)
 
