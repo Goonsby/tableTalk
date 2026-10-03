@@ -3,15 +3,20 @@ import XCTest
 /// Sample mode exercises the real conversation view without speech services,
 /// microphone permissions, downloaded models, or live conversation data.
 final class TableTalkUITests: XCTestCase {
+    @MainActor
     private var app: XCUIApplication!
 
-    override func setUpWithError() throws {
+    // XCTestCase's synchronous setup override is nonisolated. Keep UI setup
+    // in an explicitly isolated helper called by each UI test instead.
+    @MainActor
+    private func launchApp() {
         continueAfterFailure = false
         app = XCUIApplication()
         app.launchArguments = ["--ui-testing"]
         app.launch()
     }
 
+    @MainActor
     private func revealSampleButton() -> XCUIElement {
         let button = app.buttons["setup.startSample"]
         XCTAssertTrue(button.waitForExistence(timeout: 10))
@@ -20,12 +25,16 @@ final class TableTalkUITests: XCTestCase {
         return button
     }
 
+    @MainActor
     private func openSample() {
+        launchApp()
         revealSampleButton().tap()
         XCTAssertTrue(app.staticTexts["demo.label"].waitForExistence(timeout: 5))
     }
 
+    @MainActor
     func testFreshLaunchRequiresSetupAndSampleNeedsNoPermissions() {
+        launchApp()
         let sample = revealSampleButton()
         let realConversation = app.buttons["setup.startConversation"]
         XCTAssertTrue(realConversation.exists)
@@ -37,6 +46,7 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["demo.label"].waitForExistence(timeout: 5))
     }
 
+    @MainActor
     func testSampleShowsTwoLanguagePanelsAndTranslation() {
         openSample()
         XCTAssertTrue(app.descendants(matching: .any)["panel.english"].exists)
@@ -53,6 +63,7 @@ final class TableTalkUITests: XCTestCase {
         add(screenshot)
     }
 
+    @MainActor
     func testClearRemovesBothSidesOfSampleTurn() {
         openSample()
         app.buttons["conversation.clear"].tap()
@@ -61,6 +72,7 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["demo.label"].exists)
     }
 
+    @MainActor
     func testLeavingConversationReturnsToSetup() {
         openSample()
         app.buttons["conversation.setup"].tap()
@@ -68,6 +80,7 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["demo.label"].exists)
     }
 
+    @MainActor
     func testSpanishSampleHasEnglishCounterpart() {
         openSample()
         app.buttons["speak.spanish"].tap()
@@ -76,6 +89,7 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["demo.label"].exists)
     }
 
+    @MainActor
     func testBackgroundingClearsConversationAndRequiresSetup() {
         openSample()
         XCUIDevice.shared.press(.home)

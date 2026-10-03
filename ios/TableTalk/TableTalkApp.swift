@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct TableTalkApp: App {
@@ -17,6 +18,10 @@ struct TableTalkApp: App {
                 }
                 .onChange(of: scenePhase) { _, phase in
                     model.sceneChanged(active: phase == .active)
+                    UIApplication.shared.isIdleTimerDisabled = phase == .active && model.screen == .conversation
+                }
+                .onChange(of: model.screen) { _, screen in
+                    UIApplication.shared.isIdleTimerDisabled = scenePhase == .active && screen == .conversation
                 }
         }
     }

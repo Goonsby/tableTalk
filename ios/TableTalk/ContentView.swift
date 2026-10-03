@@ -72,6 +72,7 @@ struct ContentView: View {
                 Button(action: model.startConversation) {
                     Text("Start conversation / Iniciar conversación")
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                        .foregroundStyle(.white)
                 }.buttonStyle(.borderedProminent).disabled(!model.ready || model.setupBusy)
                     .accessibilityIdentifier("setup.startConversation")
                 Button(action: model.startSample) {
@@ -107,8 +108,6 @@ struct ContentView: View {
                     Button("Clear / Borrar", action: model.clear)
                         .accessibilityIdentifier("conversation.clear")
                 }.buttonStyle(.bordered).font(.callout.bold())
-                Text(model.status).font(.caption).multilineTextAlignment(.center)
-                    .accessibilityIdentifier("conversation.status")
             }.padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Theme.green.opacity(0.1))
             panel(.english)
@@ -152,9 +151,12 @@ struct ContentView: View {
                     if let id = turns.last?.id { scroll.scrollTo(id, anchor: .bottom) }
                 }
             }
+            Text(statusLabel(language)).font(.caption)
+                .accessibilityIdentifier("status.\(language == .english ? "english" : "spanish")")
             Button { model.speak(language) } label: {
                 Label(speakLabel(language), systemImage: model.phase == .recording && model.speaking == language ? "stop.fill" : "mic.fill")
                     .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                    .foregroundStyle(.white)
             }.buttonStyle(.borderedProminent)
                 .disabled(!model.isSample && (!model.ready || model.phase == .processing ||
                     (model.phase == .recording && model.speaking != language)))
@@ -172,6 +174,11 @@ struct ContentView: View {
         }
         return language == .english ? "Speak English" : "Hablar español"
     }
+
+    private func statusLabel(_ language: SourceLanguage) -> String {
+        let parts = model.status.components(separatedBy: " / ")
+        return (language == .english ? parts.first : parts.last) ?? model.status
+    }
 }
 
 private struct TranslationHost: View {
@@ -182,7 +189,7 @@ private struct TranslationHost: View {
         Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
             .translationTask(TranslationSession.Configuration(
                 source: Locale.Language(identifier: job.source.code),
-                target: Locale.Language(identifier: job.source.other.code))) { session in
+                target: Locale.Language(identifier: job.source.other.code))) { @Sendable [model, job] session in
                 await model.perform(job, using: session)
             }
     }

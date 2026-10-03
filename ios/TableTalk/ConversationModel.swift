@@ -8,8 +8,8 @@ import TableTalkCore
 final class ConversationModel: ObservableObject {
     enum Screen { case setup, conversation }
     enum Phase { case idle, recording, processing }
-    struct TranslationJob: Identifiable {
-        enum Purpose { case prepare, check, turn }
+    struct TranslationJob: Identifiable, Sendable {
+        enum Purpose: Sendable { case prepare, check, turn }
         let id = UUID()
         let purpose: Purpose
         let source: SourceLanguage
@@ -61,54 +61,62 @@ final class ConversationModel: ObservableObject {
             source: .english, text: "Hello", generation: ledger.generation)
     }
 
-    /// Called only by the SwiftUI translationTask that owns this session.
-    func perform(_ job: TranslationJob, using session: TranslationSession) async {
-        guard current(job) else { return }
+    /// Called only by the nonisolated, Sendable SwiftUI translationTask closure.
+    /// The session never crosses into main-actor state or outlives its owning view task.
+    nonisolated func perform(_ job: TranslationJob, using session: TranslationSession) async {
+        guard await current(job), !Task.isCancelled else { return }
         do {
             if job.purpose == .prepare {
                 // Downloading is reachable only from the explicit setup button.
                 try await session.prepareTranslation()
-            } else {
-                guard await installed(job.source) else { throw AppError.missingTranslation }
+                guard await current(job), !Task.isCancelled else { return }
             }
-            guard current(job), !Task.isCancelled else { return }
+            guard await installed(job.source) else { throw AppError.missingTranslation }
+            guard await current(job), !Task.isCancelled else { return }
             // Setup/check uses fixed nonsensitive probes; visit uses just the current turn.
             let response = try await session.translate(job.text)
-            guard current(job), !Task.isCancelled else { return }
-            guard !response.targetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard await current(job), !Task.isCancelled else { return }
+            let targetText = response.targetText
+            guard !targetText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw AppError.emptyTranslation
             }
-            if job.purpose == .turn, let turnID = job.turnID {
-                _ = ledger.finish(expected: job.generation, id: turnID,
-                    translation: response.targetText, failed: false)
-                translationJob = nil
-                phase = .idle
-                status = "Tap your side to speak. / Toque su lado para hablar."
-            } else {
-                guard await installed(job.source), current(job), !Task.isCancelled else {
-                    if current(job) { fail(job, error: AppError.missingTranslation) }
-                    return
-                }
-                if job.source == .english {
-                    translationJob = TranslationJob(purpose: job.purpose, source: .spanish,
-                        text: "Hola", generation: job.generation)
-                } else {
-                    translationJob = nil
-                    setupBusy = false
-                    ready = SpeechCapture.permissionsGranted && SpeechCapture.supports(.english)
-                        && SpeechCapture.supports(.spanish)
-                    status = ready
-                        ? "Local language checks passed. Test both directions in airplane mode with Wi-Fi off before a visit. / Pruebas locales completas. Pruebe ambos idiomas en modo avión, sin Wi-Fi."
-                        : "Translation is ready. Enable microphone and Speech permissions and English/Spanish Dictation in iPhone Settings, then check again. / Traducción lista. Active los permisos y Dictado en inglés y español en Ajustes y compruebe de nuevo."
-                }
+            if job.purpose != .turn {
+                guard await installed(job.source) else { throw AppError.missingTranslation }
+                guard await current(job), !Task.isCancelled else { return }
             }
+            await complete(job, targetText: targetText)
         } catch {
-            guard current(job), !Task.isCancelled else { return }
-            fail(job, error: error)
+            // Only the job crosses actors; system errors may contain conversation text.
+            await fail(job)
         }
     }
 
-    private func fail(_ job: TranslationJob, error: Error) {
+    private func complete(_ job: TranslationJob, targetText: String) {
+        guard current(job), !Task.isCancelled else { return }
+        if job.purpose == .turn, let turnID = job.turnID {
+            _ = ledger.finish(expected: job.generation, id: turnID,
+                translation: targetText, failed: false)
+            translationJob = nil
+            phase = .idle
+            status = "Tap your side to speak. / Toque su lado para hablar."
+        } else {
+            if job.source == .english {
+                translationJob = TranslationJob(purpose: job.purpose, source: .spanish,
+                    text: "Hola", generation: job.generation)
+            } else {
+                translationJob = nil
+                setupBusy = false
+                ready = SpeechCapture.permissionsGranted && SpeechCapture.supports(.english)
+                    && SpeechCapture.supports(.spanish)
+                status = ready
+                    ? "Local language checks passed. Test both directions in airplane mode with Wi-Fi off before a visit. / Pruebas locales completas. Pruebe ambos idiomas en modo avión, sin Wi-Fi."
+                    : "Translation is ready. Enable microphone and Speech permissions and English/Spanish Dictation in iPhone Settings, then check again. / Traducción lista. Active los permisos y Dictado en inglés y español en Ajustes y compruebe de nuevo."
+            }
+        }
+    }
+
+    private func fail(_ job: TranslationJob) {
+        guard current(job), !Task.isCancelled else { return }
         if let id = job.turnID {
             _ = ledger.finish(expected: job.generation, id: id, translation: nil, failed: true)
             status = "Translation unavailable; original kept. Clear or return to setup to retry. / Traducción no disponible; se conserva el original."
@@ -126,7 +134,7 @@ final class ConversationModel: ObservableObject {
         ledger.isCurrent(job.generation) && translationJob?.id == job.id
     }
 
-    private func installed(_ source: SourceLanguage) async -> Bool {
+    nonisolated private func installed(_ source: SourceLanguage) async -> Bool {
         await LanguageAvailability().status(from: Locale.Language(identifier: source.code),
             to: Locale.Language(identifier: source.other.code)) == .installed
     }

@@ -66,16 +66,11 @@ final class SpeechCapture {
 
     private var generation = UUID()
     private var activeID: UUID?
-    private var engine: AVAudioEngine?
+    private let resources = CaptureResources()
     private var recognizer: SFSpeechRecognizer?
-    private var recognitionTask: SFSpeechRecognitionTask?
-    private var gate: AudioFrameGate?
-    private var tapInstalled = false
     private var capturing = false
-    private var sessionActive = false
     private var durationTask: Task<Void, Never>?
     private var finalResultTask: Task<Void, Never>?
-    private var observers: [NSObjectProtocol] = []
     private var finishedCallback: ((Result<String, Error>) -> Void)?
     private var stoppedCallback: (() -> Void)?
 
@@ -102,11 +97,11 @@ final class SpeechCapture {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.record, mode: .measurement, options: [])
             try session.setActive(true)
-            sessionActive = true
+            resources.sessionActive = true
 
             // Created only after the user starts a real turn. Demo mode never creates an engine.
             let engine = AVAudioEngine()
-            self.engine = engine
+            resources.engine = engine
             let input = engine.inputNode
             let format = input.outputFormat(forBus: 0)
             guard format.sampleRate > 0, format.channelCount > 0,
@@ -119,9 +114,9 @@ final class SpeechCapture {
             request.shouldReportPartialResults = false
             request.taskHint = .dictation
             let gate = AudioFrameGate(request: request, format: format)
-            self.gate = gate
+            resources.gate = gate
 
-            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            resources.recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 // Only a final transcript is eligible for display. Never promote a partial result.
                 let finalText = result?.isFinal == true ? result?.bestTranscription.formattedString : nil
                 let failed = error != nil
@@ -143,13 +138,13 @@ final class SpeechCapture {
                     }
                 }
             }
-            tapInstalled = true
+            resources.tapInstalled = true
             engine.prepare()
             try engine.start()
             capturing = true
             installInterruptionObservers(id: id)
             durationTask = Task { @MainActor [weak self] in
-                do { try await Task.sleep(nanoseconds: 12_000_000_000) } catch { return }
+                do { try await Task.sleep(nanoseconds: UInt64(AudioSamples.maxSeconds) * 1_000_000_000) } catch { return }
                 guard let self, self.activeID == id else { return }
                 self.finish()
             }
@@ -204,9 +199,10 @@ final class SpeechCapture {
     }
 
     private func audioQualityError() -> CaptureError? {
-        guard let metrics = gate?.metrics else { return .tooShort }
-        if metrics.duration < 0.5 { return .tooShort }
-        if !metrics.rms.isFinite || metrics.rms < 0.002 { return .tooQuiet }
+        guard let metrics = resources.gate?.metrics else { return .tooShort }
+        let minimumSeconds = Double(AudioSamples.minimumSamples) / Double(AudioSamples.sampleRate)
+        if metrics.duration < minimumSeconds { return .tooShort }
+        if !metrics.rms.isFinite || metrics.rms < AudioSamples.minimumRMS { return .tooQuiet }
         return nil
     }
 
@@ -229,19 +225,7 @@ final class SpeechCapture {
         capturing = false
         durationTask?.cancel()
         durationTask = nil
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
-        observers.removeAll()
-        gate?.endAudio()
-        engine?.stop()
-        if tapInstalled {
-            engine?.inputNode.removeTap(onBus: 0)
-            tapInstalled = false
-        }
-        engine = nil
-        if sessionActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            sessionActive = false
-        }
+        resources.stopMicrophone()
         let stopped = stoppedCallback
         stoppedCallback = nil
         return stopped
@@ -250,10 +234,10 @@ final class SpeechCapture {
     private func releaseRecognition() {
         finalResultTask?.cancel()
         finalResultTask = nil
-        recognitionTask?.cancel()
-        recognitionTask = nil
+        resources.recognitionTask?.cancel()
+        resources.recognitionTask = nil
         recognizer = nil
-        gate = nil
+        resources.gate = nil
     }
 
     private func installInterruptionObservers(id: UUID) {
@@ -268,21 +252,49 @@ final class SpeechCapture {
                     self.complete(.failure(CaptureError.interrupted))
                 }
             }
-            observers.append(observer)
+            resources.observers.append(observer)
         }
     }
 
     deinit {
         durationTask?.cancel()
         finalResultTask?.cancel()
-        gate?.endAudio()
-        recognitionTask?.cancel()
-        engine?.stop()
-        if tapInstalled { engine?.inputNode.removeTap(onBus: 0) }
+        // Stored-property destruction releases resources without crossing actor isolation.
+    }
+}
+
+/// Deliberately non-Sendable and owned exclusively by SpeechCapture: all ordinary accesses
+/// occur on its main actor. Callbacks never capture this holder. Its final release is exclusive,
+/// so deinit can synchronously clean up on any thread without assuming main-actor execution.
+/// AVAudioEngine/session cleanup does not require the main thread; the concurrently running
+/// audio tap touches only AudioFrameGate, whose append/endAudio operations share a lock.
+private final class CaptureResources {
+    var engine: AVAudioEngine?
+    var recognitionTask: SFSpeechRecognitionTask?
+    var gate: AudioFrameGate?
+    var tapInstalled = false
+    var sessionActive = false
+    var observers: [NSObjectProtocol] = []
+
+    func stopMicrophone() {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
+        observers.removeAll()
+        gate?.endAudio()
+        engine?.stop()
+        if tapInstalled {
+            engine?.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        engine = nil
         if sessionActive {
             try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+            sessionActive = false
         }
+    }
+
+    deinit {
+        stopMicrophone()
+        recognitionTask?.cancel()
     }
 }
 
@@ -303,7 +315,7 @@ private final class AudioFrameGate: @unchecked Sendable {
         self.request = request
         sampleRate = format.sampleRate
         channelCount = Int(format.channelCount)
-        maxFrames = Int(format.sampleRate * 12)
+        maxFrames = Int(format.sampleRate * Double(AudioSamples.maxSeconds))
     }
 
     /// Returns true once, when the 12-second frame bound is reached.
