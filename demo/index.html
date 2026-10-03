@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f8f6ef">
+  <meta name="description" content="Try TableTalk's two-sided English and Spanish conversation layout. An interactive sample with no microphone, account, or installation.">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>TableTalk — a conversation, across languages</title>
+  <style>
+    :root{color-scheme:light;--paper:#f8f6ef;--ink:#203b36;--muted:#536963;--green:#24675f;--deep:#164f47;--line:#d4dcd2;--pale:#e9eee5;--gold:#ba712d;--cream:#f4e6d3}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}button,select{font:inherit}button,a,select{-webkit-tap-highlight-color:transparent}button,a{touch-action:manipulation}button{cursor:pointer}button:disabled{cursor:default;opacity:.55}a{color:var(--deep);text-underline-offset:4px}button:focus-visible,a:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:4px}button{border:0}svg{display:block;flex-shrink:0}button svg{width:19px;height:19px}button{display:inline-flex;align-items:center;justify-content:center;gap:8px}button[hidden],[hidden]{display:none!important}.skip{position:absolute;top:-70px;left:20px;padding:12px;background:white;z-index:10}.skip:focus{top:10px}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .site-header{max-width:1200px;margin:auto;padding:27px 36px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);gap:16px}.brand{display:inline-flex;align-items:center;gap:11px;text-decoration:none;color:var(--ink);font-size:23px;letter-spacing:-.8px;font-weight:750}.brand-mark{width:35px;height:35px;color:var(--green)}.header-link{font-size:13px;font-weight:650;display:flex;align-items:center;gap:8px;text-decoration:none}.header-link svg{width:16px;height:16px}.hero{max-width:1180px;margin:auto;padding:48px 36px 52px;display:grid;grid-template-columns:minmax(0,1fr) 430px;align-items:center;gap:90px}.intro{padding-bottom:12px}.eyebrow{font-size:11px;letter-spacing:2px;font-weight:750;color:var(--green);margin:0 0 24px}.intro h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(44px,5vw,68px);font-weight:400;letter-spacing:-2.8px;line-height:1.06;margin:0 0 25px}.intro h1 em{font-style:italic;color:var(--green)}.lede{font-size:17px;line-height:1.75;max-width:415px;color:var(--muted);margin:0 0 28px}.sample-badge{display:inline-flex;align-items:center;gap:7px;color:#775025;background:var(--cream);padding:7px 11px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.25px}.sample-badge svg{width:14px;height:14px}.try-card{margin-top:24px;padding-top:24px;border-top:1px solid var(--line);max-width:405px}.field-label{display:block;font-size:12px;font-weight:700;margin:0 0 9px}.select-wrap{position:relative}.select-wrap svg{position:absolute;right:14px;top:17px;width:17px;height:17px;pointer-events:none}select{appearance:none;background:#fff9;color:var(--ink);border:1px solid #bccbc1;border-radius:10px;padding:13px 42px 13px 14px;width:100%;height:49px;font-size:14px;font-weight:550}.play-row{display:flex;gap:10px;margin-top:12px}.primary-btn{background:var(--green);color:white;min-height:49px;border-radius:10px;padding:12px 18px;font-size:14px;font-weight:650;flex:1;transition:background .15s}.primary-btn:hover{background:var(--deep)}.quiet-btn{border:1px solid #bccbc1;background:transparent;color:var(--green);border-radius:10px;padding:10px 12px;font-size:13px;font-weight:650;min-height:44px}.quiet-btn:hover{background:var(--pale)}.explanation{font-size:12px;line-height:1.7;color:var(--muted);margin:12px 0 0}.privacy-line{display:flex;align-items:flex-start;gap:9px;margin-top:23px;color:var(--muted);font-size:12px;line-height:1.6}.privacy-line svg{width:16px;height:16px;margin-top:2px}.steps{display:flex;gap:22px;margin:29px 0 0;padding:0;list-style:none}.steps li{font-size:12px;color:var(--muted);line-height:1.6;display:flex;gap:8px;align-items:flex-start}.steps span{font-family:Georgia,serif;font-size:20px;line-height:1.15;color:var(--gold)}
+    .preview{width:100%;max-width:430px;justify-self:center}.preview-heading{display:flex;justify-content:space-between;align-items:center;padding:0 19px 12px;font-size:11px;color:var(--muted)}.preview-heading strong{font-size:10px;letter-spacing:1.3px;font-weight:700;color:var(--green)}.device{max-width:384px;margin:auto;background:#293f38;border:8px solid #293f38;border-radius:32px;box-shadow:0 25px 52px #2543381a,0 2px 6px #2543381a;overflow:hidden}.screen{height:716px;background:var(--paper);display:flex;flex-direction:column;transition:transform .35s ease}.screen.flipped{transform:rotate(180deg)}.panel{flex:1;min-height:0;display:flex;flex-direction:column;padding:17px;gap:10px}.spanish{transform:rotate(180deg)}.screen.upright .spanish{transform:none}.panel-heading{display:flex;align-items:center;justify-content:space-between;gap:8px}.panel h2{font-size:19px;letter-spacing:-.45px;margin:0;font-weight:730}.side-label{font-size:9px;letter-spacing:1.3px;font-weight:700;color:var(--muted)}.captions{flex:1;min-height:0;overflow:auto;scrollbar-width:thin;scrollbar-color:#bdccc2 transparent;overscroll-behavior:contain;padding:4px 0}.turn{margin:0 0 16px;padding-bottom:14px;border-bottom:1px solid var(--line);animation:arrive .25s ease}.turn:last-child{margin-bottom:0}.turn-label{font-size:9px;font-weight:750;letter-spacing:.8px;text-transform:uppercase;color:var(--green);margin:0 0 6px}.caption-primary{font-size:23px;line-height:1.27;font-weight:600;letter-spacing:-.45px;margin:0 0 8px;overflow-wrap:anywhere}.caption-secondary{font-size:13px;line-height:1.45;color:var(--muted);margin:0;overflow-wrap:anywhere}.pending{color:var(--muted);font-style:italic;font-weight:400}.panel-status{font-size:10px;color:var(--muted);line-height:1.35;margin:0}.talk{background:var(--green);color:#fff;border-radius:10px;min-height:47px;width:100%;font-size:14px;font-weight:650;padding:10px}.talk:hover{background:var(--deep)}.talk svg{width:17px;height:17px}.divider{padding:10px 12px;background:#e5ece2;text-align:center;flex:none}.screen.flipped .divider{transform:rotate(180deg)}.divider p{display:flex;justify-content:center;align-items:center;gap:5px;font-size:9px;letter-spacing:.6px;font-weight:750;margin:0 0 8px;color:var(--green)}.divider svg{width:12px;height:12px}.divider-controls{display:flex;gap:8px;justify-content:center;align-items:center}.divider button{min-height:32px;padding:6px 10px;background:#fff9;border-radius:6px;font-size:11px;color:var(--ink);font-weight:650}.divider button:hover{background:white}#turn-count{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums;margin-left:4px}.empty{margin:auto 0;color:var(--muted);font-size:17px;line-height:1.5;padding-top:12px}.screen.large-text .caption-primary{font-size:29px}.screen.large-text .caption-secondary{font-size:16px}.screen.large-text .empty{font-size:21px}.view-controls{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:19px}.view-controls button{min-height:38px;padding:8px 10px;background:transparent;color:var(--green);font-size:11px;border:1px solid #c5d1c6;border-radius:8px}.view-controls button[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:white}.view-controls svg{width:14px;height:14px}.orientation-note{font-size:11px;line-height:1.5;text-align:center;color:var(--muted);margin:11px 12px 0}.app-status{min-height:18px;font-size:11px;line-height:1.5;color:var(--green);margin:12px 0 0;font-weight:550}
+    .below{max-width:1110px;margin:0 auto;padding:31px 0 36px;border-top:1px solid var(--line);display:grid;grid-template-columns:1fr 1fr 1fr;gap:38px}.below h2{font-size:14px;margin:0 0 9px;letter-spacing:-.15px}.below p{font-size:12px;line-height:1.75;color:var(--muted);margin:0}.below .foot-label{font-size:10px;font-weight:700;letter-spacing:1px;color:var(--green);margin-bottom:9px}.site-footer{max-width:1182px;margin:auto;border-top:1px solid var(--line);padding:19px 36px 28px;display:flex;justify-content:space-between;gap:20px;font-size:11px;line-height:1.6;color:var(--muted)}.site-footer a{white-space:nowrap}dialog{border:1px solid var(--line);border-radius:20px;background:var(--paper);color:var(--ink);padding:28px;max-width:560px;width:calc(100% - 32px);max-height:85dvh;overflow:auto;box-shadow:0 28px 90px #17372d40}dialog::backdrop{background:#17372d88;backdrop-filter:blur(4px)}.dialog-heading{display:flex;justify-content:space-between;align-items:start;gap:20px}dialog h2{font-family:Georgia,serif;font-size:30px;font-weight:400;margin:0 0 18px;letter-spacing:-.7px}dialog h3{font-size:16px;margin:24px 0 8px}dialog p,dialog li{font-size:14px;line-height:1.7;color:var(--muted)}dialog ul{padding-left:20px}#close-setup{width:36px;height:36px;border-radius:50%;background:var(--pale);color:var(--ink);flex:none;font-size:24px}.native-links{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}.native-links a{font-size:13px;font-weight:650}.dialog-note{padding:13px 15px;background:var(--cream);border-radius:10px;font-size:12px!important}.noscript{padding:20px;text-align:center;background:var(--cream)}
+    @keyframes arrive{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+    @media(max-width:1000px){.hero{gap:40px;grid-template-columns:minmax(0,1fr) 390px;padding:38px 28px}.intro h1{font-size:52px}.below{margin:0 28px;gap:24px}.steps{gap:15px}.site-header{padding:24px 28px}}
+    @media(max-width:760px){.site-header{padding:20px 22px}.brand{font-size:21px}.header-link{font-size:12px}.hero{display:flex;flex-direction:column;padding:34px 22px 30px;gap:32px}.intro{max-width:480px;width:100%;padding:0}.intro h1{font-size:49px;letter-spacing:-2px;margin-bottom:18px}.eyebrow{margin-bottom:17px}.lede{font-size:15px;line-height:1.7;margin-bottom:18px;max-width:100%}.try-card{margin-top:20px;padding-top:19px;max-width:none}.steps{display:none}.privacy-line{margin-top:16px}.preview{max-width:400px}.screen{height:660px}.device{border-radius:28px}.preview-heading{padding-left:9px;padding-right:9px}.below{grid-template-columns:1fr;margin:0 22px;padding-top:26px;gap:24px}.below p{font-size:13px}.site-footer{padding:20px 22px;flex-direction:column;gap:8px}.caption-primary{font-size:22px}.panel{padding:15px;gap:8px}.orientation-note{font-size:11px}}
+    @media(max-width:360px){.hero{padding:26px 15px}.site-header{padding:18px 15px}.intro h1{font-size:43px}.device{border-width:6px;border-radius:24px}.panel{padding:12px}.screen{height:640px}.caption-primary{font-size:21px}.panel h2{font-size:17px}.side-label{font-size:8px}.divider{padding:9px 6px}.divider p{font-size:8px}.divider button{font-size:10px}.play-row{gap:7px}.primary-btn{padding:11px;font-size:13px}.below{margin:0 15px}.header-link{font-size:11px}.brand{font-size:20px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<a class="skip" href="#demo">Skip to interactive demo</a>
+<header class="site-header">
+  <a class="brand" href="#" aria-label="TableTalk home"><svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M4 6h23a5 5 0 0 1 5 5v9a5 5 0 0 1-5 5H15l-7 6v-6H4V6Z" fill="currentColor"/><path d="M19 28h14V15h3v19h-5v5l-7-5h-5v-6Z" fill="currentColor" opacity=".4"/><path d="M11 13h14M11 18h9" stroke="#f8f6ef" stroke-width="2.4" stroke-linecap="round"/></svg>TableTalk</a>
+  <a class="header-link" href="#get-apps">About the apps <span aria-hidden="true">↗</span></a>
+</header>
+<main>
+  <section class="hero" aria-label="TableTalk interactive preview">
+    <div class="intro">
+      <p class="eyebrow">ONE PHONE. TWO SIDES.</p>
+      <h1>A little closer.<br>Even across<br><em>languages.</em></h1>
+      <p class="lede">Set a phone between you. Speak in turns.<br>Read the conversation in English and Spanish, each facing your own side of the table.</p>
+      <span class="sample-badge"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M7 4v5a3 3 0 0 0 6 0V4a3 3 0 0 0-6 0ZM4 8v1a6 6 0 0 0 12 0V8M10 15v3M7 18h6M2 2l16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>Interactive sample · microphone off</span>
+      <div class="try-card">
+        <label class="field-label" for="scenario">Choose a sample conversation</label>
+        <div class="select-wrap"><select id="scenario"><option value="welcome">A warm welcome</option><option value="plans">Making plans together</option><option value="clarity">Asking for clarity</option></select><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m5 7 5 5 5-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></div>
+        <div class="play-row"><button class="primary-btn" id="play"><svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M6 3.5v13L16 10 6 3.5Z"/></svg><span id="play-label">Play a conversation</span></button><button class="quiet-btn" id="restart" aria-label="Reset the sample conversation">Reset</button></div>
+        <p class="explanation">Or tap either green button in the phone. Each tap adds a prepared sample sentence, not recorded speech.</p>
+        <p id="app-status" class="app-status" role="status" aria-live="polite" aria-atomic="true">Ready when you are. Try either language.</p>
+      </div>
+      <div class="privacy-line"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m10 2 6 2v5c0 4-6 8-6 8S4 13 4 9V4l6-2Z" stroke="currentColor" stroke-width="1.4"/><path d="m7 9 2 2 4-4" stroke="currentColor" stroke-width="1.4"/></svg><span>No microphone access. No typed messages.<br>No saved conversations, accounts, or analytics.</span></div>
+      <ol class="steps"><li><span>01</span>Choose a side.</li><li><span>02</span>Take a turn.</li><li><span>03</span>Meet in the middle.</li></ol>
+    </div>
+    <div class="preview" id="demo">
+      <div class="preview-heading"><strong>TRY THE TABLE VIEW</strong><span>English ↔ Español</span></div>
+      <div class="device">
+        <div class="screen" id="screen">
+          <section class="panel spanish" lang="es" aria-label="Lado de español">
+            <div class="panel-heading"><h2>Español</h2><span class="side-label">SU LADO</span></div>
+            <div class="captions" id="spanish-captions" tabindex="0" aria-label="Subtítulos de ejemplo en español"></div>
+            <p class="panel-status" id="spanish-status">Solo ejemplo · micrófono apagado</p>
+            <button class="talk" id="spanish-talk" aria-label="Añadir un ejemplo en español"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="7" y="2" width="6" height="10" rx="3" stroke="currentColor" stroke-width="1.7"/><path d="M4 8v1a6 6 0 0 0 12 0V8M10 15v3M7 18h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Ejemplo en español</button>
+          </section>
+          <div class="divider"><p>SAMPLE / EJEMPLO · MICROPHONE OFF</p><div class="divider-controls"><button id="clear">Clear / Borrar</button><button id="setup">App guide</button><span id="turn-count">1 / 12</span></div></div>
+          <section class="panel english" aria-label="English side">
+            <div class="panel-heading"><h2>English</h2><span class="side-label">YOUR SIDE</span></div>
+            <div class="captions" id="english-captions" tabindex="0" aria-label="Sample English captions"></div>
+            <p class="panel-status" id="english-status">Sample only · microphone off</p>
+            <button class="talk" id="english-talk" aria-label="Add a sample English turn"><svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><rect x="7" y="2" width="6" height="10" rx="3" stroke="currentColor" stroke-width="1.7"/><path d="M4 8v1a6 6 0 0 0 12 0V8M10 15v3M7 18h6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>Sample English turn</button>
+          </section>
+        </div>
+      </div>
+      <div class="view-controls" aria-label="Preview controls"><button id="rotate" aria-pressed="false"><span aria-hidden="true">↻</span> Swap seats</button><button id="layout-toggle" aria-pressed="false">Read both upright</button><button id="text-size" aria-pressed="false" aria-label="Use larger captions"><span aria-hidden="true">A+</span> Text size</button></div>
+      <p class="orientation-note" id="orientation-label">Spanish faces the other person. English faces you.</p>
+    </div>
+  </section>
+  <section class="below" id="get-apps" aria-label="About this preview and the native apps">
+    <div><p class="foot-label">THIS BROWSER DEMO</p><h2>A feel for the conversation.</h2><p>All sentences and translations are prewritten. The brief caption delay is simulated. This page does not record, recognize, or translate speech. Sample history clears when you leave the tab or reload.</p></div>
+    <div><p class="foot-label">THE NATIVE APPS</p><h2>Built to share a phone.</h2><p>The Android and iPhone apps use on-device speech and translation after language setup. Offline readiness and real-world accuracy need testing on your phone. <a href="https://github.com/Goonsby/tableTalk" target="_blank" rel="noopener noreferrer">Explore TableTalk on GitHub ↗</a></p></div>
+    <div><p class="foot-label">BEFORE YOU INSTALL</p><h2>Start with the right guide.</h2><p><a href="https://github.com/Goonsby/tableTalk/blob/codex/recover-pocophone-f1/docs/pocophone-f1.md" target="_blank" rel="noopener noreferrer">Android / POCO setup ↗</a><br><a href="https://github.com/Goonsby/tableTalk/blob/codex/iphone-native/docs/iphone.md" target="_blank" rel="noopener noreferrer">iPhone build & installation ↗</a><br>iPhone installation currently requires Xcode and your Apple signing identity.</p></div>
+  </section>
+</main>
+<footer class="site-footer"><span>TableTalk · More room for understanding.</span><span>Sample content only. Verify important meanings with a qualified interpreter.</span></footer>
+<dialog id="setup-dialog" aria-labelledby="guide-title">
+  <div class="dialog-heading"><h2 id="guide-title">From a sample<br>to a conversation.</h2><button id="close-setup" aria-label="Close app guide">×</button></div>
+  <p>This browser preview uses prewritten examples. It has no speech or translation engine, microphone connection, or language downloads.</p>
+  <h3>In the native app</h3><ul><li>Prepare English and Spanish language assets before your visit.</li><li>Place one phone between you. Each person taps their side and speaks a short turn.</li><li>The original caption appears first, then the translation. Turns are capped at 12 seconds and history at 12 turns.</li><li>Clear, returning to setup, or leaving the foreground clears conversation history.</li></ul>
+  <div class="native-links"><a href="https://github.com/Goonsby/tableTalk/blob/codex/recover-pocophone-f1/docs/pocophone-f1.md" target="_blank" rel="noopener noreferrer">Android setup ↗</a><a href="https://github.com/Goonsby/tableTalk/blob/codex/iphone-native/docs/iphone.md" target="_blank" rel="noopener noreferrer">iPhone setup ↗</a></div>
+  <p class="dialog-note">Native device validation is still required. Test both languages with airplane mode on and Wi-Fi off. iOS cannot block screenshots or remove the app's network access. This demo cannot verify your phone's offline readiness.</p>
+  <p>Opening this guide cleared the sample conversation. Nothing is saved.</p>
+</dialog>
+<noscript><p class="noscript">Enable JavaScript to try the sample controls. This demo uses prepared sentences only and never requests a microphone.</p></noscript>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const scripts = {
+    welcome: [
+      {source:'en',en:"It's good to see you.",es:'Me alegra verte.'},
+      {source:'es',en:'Thank you for coming to talk with me.',es:'Gracias por venir a hablar conmigo.'},
+      {source:'en',en:'How has your day been?',es:'¿Cómo ha ido tu día?'},
+      {source:'es',en:'A little better now. How about yours?',es:'Un poco mejor ahora. ¿Y el tuyo?'}
+    ],
+    plans: [
+      {source:'en',en:'Shall we meet here tomorrow?',es:'¿Nos vemos aquí mañana?'},
+      {source:'es',en:'Yes. Would the afternoon work?',es:'Sí. ¿Te viene bien por la tarde?'},
+      {source:'en',en:"That works for me. Let's take our time.",es:'Me viene bien. Tomémonos nuestro tiempo.'},
+      {source:'es',en:'Great. I look forward to seeing you.',es:'Muy bien. Espero verte pronto.'}
+    ],
+    clarity: [
+      {source:'en',en:'Please let me know if anything is unclear.',es:'Por favor, dime si algo no está claro.'},
+      {source:'es',en:'Could you repeat that more slowly?',es:'¿Puedes repetirlo más despacio?'},
+      {source:'en',en:'Of course. We can go one sentence at a time.',es:'Claro. Podemos ir frase por frase.'},
+      {source:'es',en:'Thank you. I understand now.',es:'Gracias. Ahora entiendo.'}
+    ]
+  };
+  let turns = [], generation = 0, nextID = 0, playing = false, playbackIndex = 0;
+  let indices = {en:0,es:0};
+  const timers = new Set();
+  const text = (tag, className, value) => { const node=document.createElement(tag);node.className=className;node.textContent=value;return node; };
+  function later(action, delay) {
+    const expected=generation;
+    const timer=setTimeout(() => {timers.delete(timer);if(expected===generation)action();},delay);
+    timers.add(timer);
+  }
+  function announce(message) { $('app-status').textContent=message; }
+  function setPlaying(value) {
+    playing=value;
+    $('play-label').textContent=value?'Pause sample':'Play a conversation';
+    $('play').setAttribute('aria-pressed',String(value));
+    $('play').querySelector('svg').innerHTML=value?'<path d="M5 4h3v12H5zm7 0h3v12h-3z"/>':'<path d="M6 3.5v13L16 10 6 3.5Z"/>';
+  }
+  function stopPending() {
+    generation++;
+    for(const timer of timers)clearTimeout(timer);
+    timers.clear();setPlaying(false);
+    // Stopping sample playback resolves only prepared text; no live inference exists.
+    turns.forEach(turn=>{turn.complete=true;});
+  }
+  function render() {
+    for(const language of ['en','es']) {
+      const pane=$(language==='en'?'english-captions':'spanish-captions');
+      pane.replaceChildren();
+      if(!turns.length)pane.append(text('p','empty',language==='en'?'A little space to listen. Tap a sample turn to begin.':'Un espacio para escuchar. Toque un ejemplo para comenzar.'));
+      for(const turn of turns) {
+        const card=text('article','turn','');card.dataset.source=turn.source;card.dataset.turnId=String(turn.id);
+        const original=turn.source===language;
+        const label=language==='en'?(original?'Original · English':'Sample translation'):(original?'Original · español':'Traducción de ejemplo');
+        const pending=!turn.complete&&!original;
+        const other=language==='en'?'es':'en';
+        const primary=text('p','caption-primary'+(pending?' pending':''),pending?(language==='en'?'Sample translation…':'Traducción de ejemplo…'):turn[language]);
+        primary.lang=language;
+        const secondary=text('p','caption-secondary',!turn.complete&&original?(language==='en'?'Prepared translation appearing shortly…':'El ejemplo traducido aparecerá en un momento…'):turn[other]);secondary.lang=other;
+        card.append(text('p','turn-label',label),primary,secondary);pane.append(card);
+      }
+      pane.scrollTop=pane.scrollHeight;
+    }
+    $('turn-count').textContent=turns.length+' / 12';
+    $('turn-count').setAttribute('aria-label',turns.length+' sample turns, maximum twelve');
+  }
+  function add(sample, animate=true) {
+    const turn={...sample,id:++nextID,complete:!animate};turns.push(turn);
+    if(turns.length>12)turns.shift();render();
+    if(animate)later(()=>{turn.complete=true;render();announce('Sample caption shown in English and Spanish. No speech was recorded.');},600);
+  }
+  function clear(message='Sample cleared. Nothing is saved.') {
+    stopPending();turns=[];indices={en:0,es:0};playbackIndex=0;render();announce(message);
+  }
+  function manual(language) {
+    if(playing)stopPending();
+    const choices=scripts[$('scenario').value].filter(item=>item.source===language);
+    add(choices[indices[language]++%choices.length]);
+    announce(language==='en'?'Showing a prepared English turn…':'Mostrando un ejemplo en español…');
+  }
+  function playNext() {
+    if(!playing)return;
+    const story=scripts[$('scenario').value];
+    if(playbackIndex>=story.length){setPlaying(false);playbackIndex=0;announce('Sample complete. Try either language, or choose another conversation.');return;}
+    add(story[playbackIndex++]);later(playNext,1800);
+  }
+  $('english-talk').addEventListener('click',()=>manual('en'));
+  $('spanish-talk').addEventListener('click',()=>manual('es'));
+  $('play').addEventListener('click',()=>{
+    if(playing){stopPending();render();announce('Sample paused. Press Play to continue.');return;}
+    if(playbackIndex===0){clear();}
+    setPlaying(true);announce('Playing a prewritten conversation. Microphone stays off.');playNext();
+  });
+  $('clear').addEventListener('click',()=>clear());
+  $('restart').addEventListener('click',()=>clear('Sample reset. Choose either language or press Play.'));
+  $('scenario').addEventListener('change',()=>clear('New sample selected. Press Play or try either language.'));
+  $('rotate').addEventListener('click',()=>{
+    const flipped=$('screen').classList.toggle('flipped');$('rotate').setAttribute('aria-pressed',String(flipped));
+    $('orientation-label').textContent=flipped?'You are in the Spanish seat. English faces the other person.':'Spanish faces the other person. English faces you.';
+  });
+  $('layout-toggle').addEventListener('click',()=>{
+    const upright=$('screen').classList.toggle('upright');$('screen').classList.remove('flipped');
+    $('layout-toggle').setAttribute('aria-pressed',String(upright));$('rotate').setAttribute('aria-pressed','false');$('rotate').disabled=upright;
+    $('orientation-label').textContent=upright?'Reading preview: both sides upright. Switch back to see the table layout.':'Spanish faces the other person. English faces you.';
+  });
+  $('text-size').addEventListener('click',()=>{const large=$('screen').classList.toggle('large-text');$('text-size').setAttribute('aria-pressed',String(large));});
+  $('setup').addEventListener('click',()=>{clear('Sample cleared while you read the app guide.');$('setup-dialog').showModal();});
+  $('close-setup').addEventListener('click',()=>$('setup-dialog').close());
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)clear('Sample cleared when you left the tab. Try a fresh conversation.');});
+  window.addEventListener('pagehide',()=>clear());
+  setPlaying(false);add(scripts.welcome[0],false);
+})();
+</script>
+</body>
+</html>
