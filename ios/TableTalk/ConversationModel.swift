@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Translation
 import TableTalkCore
+import UIKit
 
 /// All conversation state is RAM-only and confined to the main actor.
 @MainActor
@@ -27,8 +28,13 @@ final class ConversationModel: ObservableObject {
     @Published private(set) var setupBusy = false
     @Published private(set) var status = "Prepare both languages before a visit. / Prepare ambos idiomas antes de la visita."
     @Published private(set) var translationJob: TranslationJob?
+    @Published private(set) var revealingTurnID: UInt64?
+    @Published private(set) var captionReveal: CaptionReveal?
     private let speech = SpeechCapture()
     private var pending: Task<Void, Never>?
+    private var revealTask: Task<Void, Never>?
+    private var revealEnabled = !UIAccessibility.isReduceMotionEnabled
+        && !UIAccessibility.isVoiceOverRunning
     private var foreground = true
 
     var turns: [ConversationTurn] { ledger.turns }
@@ -94,8 +100,10 @@ final class ConversationModel: ObservableObject {
     private func complete(_ job: TranslationJob, targetText: String) {
         guard current(job), !Task.isCancelled else { return }
         if job.purpose == .turn, let turnID = job.turnID {
-            _ = ledger.finish(expected: job.generation, id: turnID,
-                translation: targetText, failed: false)
+            if ledger.finish(expected: job.generation, id: turnID,
+                translation: targetText, failed: false) {
+                beginReveal(generation: job.generation, turnID: turnID)
+            }
             translationJob = nil
             phase = .idle
             status = "Tap your side to speak. / Toque su lado para hablar."
@@ -213,6 +221,8 @@ final class ConversationModel: ObservableObject {
                     self.phase = .processing
                     self.status = "Finishing local recognition… / Finalizando el reconocimiento local…"
                 })
+                // Only a successfully started recording ends the previous reveal.
+                finishReveal()
                 phase = .recording
                 status = "Listening—tap again to finish. / Escuchando—toque de nuevo para terminar."
             } catch {
@@ -225,12 +235,22 @@ final class ConversationModel: ObservableObject {
     }
 
     private func addSample(_ language: SourceLanguage) {
-        let english = language == .english ? "Hello" : "How are you?"
-        let spanish = language == .english ? "Hola" : "¿Cómo está?"
+        finishReveal()
+        var english = language == .english ? "Hello" : "How are you?"
+        var spanish = language == .english ? "Hola" : "¿Cómo está?"
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing-long-captions") {
+            english = "Hello. Please speak slowly so I can understand each sentence. We can take a short break, ask another question, and make sure the translated words remain easy to read on this screen."
+            spanish = "Hola. Por favor, hable despacio para que pueda entender cada frase. Podemos hacer una pausa breve, hacer otra pregunta y comprobar que las palabras traducidas sigan siendo fáciles de leer en esta pantalla."
+        }
+        #endif
+        let generation = ledger.generation
         if let id = ledger.addSource(expected: ledger.generation, language: language,
             source: language == .english ? english : spanish) {
-            _ = ledger.finish(expected: ledger.generation, id: id,
-                translation: language == .english ? spanish : english, failed: false)
+            if ledger.finish(expected: generation, id: id,
+                translation: language == .english ? spanish : english, failed: false) {
+                beginReveal(generation: generation, turnID: id)
+            }
         }
         status = "Sample only · microphone off / Solo ejemplo · micrófono apagado"
     }
@@ -252,12 +272,14 @@ final class ConversationModel: ObservableObject {
     func sceneChanged(active: Bool) {
         foreground = active
         if !active {
+            finishReveal()
             // Clear conversation immediately, including on interruptions/app switcher.
             if screen == .conversation { clear(); ready = false; screen = .setup; isSample = false }
         }
     }
 
     private func cancelWork() {
+        finishReveal()
         ledger.clear()
         pending?.cancel()
         pending = nil
@@ -266,6 +288,58 @@ final class ConversationModel: ObservableObject {
         phase = .idle
         speaking = nil
         setupBusy = false
+    }
+
+    func setRevealEnabled(_ enabled: Bool) {
+        revealEnabled = enabled && !UIAccessibility.isReduceMotionEnabled
+            && !UIAccessibility.isVoiceOverRunning
+        #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--ui-testing-reduced-motion") {
+            revealEnabled = false
+        }
+        #endif
+        if !revealEnabled { finishReveal() }
+    }
+
+    /// Removing the presentation mask exposes the complete ledger text immediately.
+    func finishReveal() {
+        revealTask?.cancel()
+        revealTask = nil
+        captionReveal = nil
+        revealingTurnID = nil
+    }
+
+    private func beginReveal(generation: UInt64, turnID: UInt64) {
+        finishReveal()
+        guard ledger.isCurrent(generation), foreground, screen == .conversation,
+              let text = ledger.turns.first(where: { $0.id == turnID })?.translation else { return }
+        var enabled = revealEnabled && !UIAccessibility.isReduceMotionEnabled
+            && !UIAccessibility.isVoiceOverRunning
+        var tickNanoseconds: UInt64 = 70_000_000
+        #if DEBUG
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--ui-testing-reduced-motion") { enabled = false }
+        if arguments.contains("--ui-testing-slow-reveal") { tickNanoseconds = 200_000_000 }
+        #endif
+        let reveal = CaptionReveal(text: text, enabled: enabled)
+        guard !reveal.isComplete else { return }
+        revealingTurnID = turnID
+        captionReveal = reveal
+        revealTask = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(nanoseconds: tickNanoseconds) }
+                catch { return }
+                guard !Task.isCancelled, let self, self.foreground,
+                      self.screen == .conversation, self.ledger.isCurrent(generation),
+                      self.revealingTurnID == turnID, var reveal = self.captionReveal else { return }
+                reveal.advance()
+                if reveal.isComplete {
+                    self.finishReveal()
+                    return
+                }
+                self.captionReveal = reveal
+            }
+        }
     }
 
     private enum AppError: Error { case missingTranslation, emptyTranslation }

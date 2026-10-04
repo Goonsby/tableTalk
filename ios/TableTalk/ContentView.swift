@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Translation
 import TableTalkCore
 
@@ -10,7 +11,7 @@ private enum Theme {
 
 struct ContentView: View {
     @ObservedObject var model: ConversationModel
-    @ScaledMetric(relativeTo: .title2) private var captionSize = 25
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -19,6 +20,11 @@ struct ContentView: View {
         }
         .foregroundStyle(Theme.ink)
         .tint(Theme.green)
+        .onAppear { updateRevealPreference() }
+        .onChange(of: reduceMotion) { _, _ in updateRevealPreference() }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in
+            updateRevealPreference()
+        }
         .background {
             if let job = model.translationJob {
                 TranslationHost(model: model, job: job)
@@ -92,36 +98,61 @@ struct ContentView: View {
     }
 
     private var conversation: some View {
-        VStack(spacing: 0) {
-            panel(.spanish)
-                .rotationEffect(.degrees(180))
-            VStack(spacing: 6) {
-                if model.isSample {
-                    Text("SAMPLE · MICROPHONE OFF / EJEMPLO · SIN MICRÓFONO")
-                        .font(.caption.bold()).multilineTextAlignment(.center)
-                        .accessibilityIdentifier("demo.label")
+        GeometryReader { geometry in
+            if geometry.size.width > geometry.size.height {
+                VStack(spacing: 0) {
+                    conversationControls
+                    HStack(spacing: 0) {
+                        CaptionPanel(model: model, language: .spanish).rotationEffect(.degrees(180))
+                        Divider()
+                        CaptionPanel(model: model, language: .english)
+                    }
                 }
-                HStack {
-                    Button("Setup / Preparación", action: model.showSetup)
-                        .accessibilityIdentifier("conversation.setup")
-                    Spacer()
-                    Button("Clear / Borrar", action: model.clear)
-                        .accessibilityIdentifier("conversation.clear")
-                }.buttonStyle(.bordered).font(.callout.bold())
-            }.padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Theme.green.opacity(0.1))
-            panel(.english)
+            } else {
+                VStack(spacing: 0) {
+                    CaptionPanel(model: model, language: .spanish).rotationEffect(.degrees(180))
+                    conversationControls
+                    CaptionPanel(model: model, language: .english)
+                }
+            }
         }
     }
 
-    private func panel(_ language: SourceLanguage) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(language == .english ? "English" : "Español").font(.title3.bold())
-                Spacer()
-                Text(language == .english ? "YOUR SIDE" : "SU LADO")
-                    .font(.caption.weight(.semibold)).tracking(1.3)
+    private var conversationControls: some View {
+        VStack(spacing: 4) {
+            if model.isSample {
+                Text("SAMPLE · MICROPHONE OFF / EJEMPLO · SIN MICRÓFONO")
+                    .font(.caption.bold()).multilineTextAlignment(.center)
+                    .accessibilityIdentifier("demo.label")
             }
+            HStack(spacing: 12) {
+                Button("Setup / Preparación", action: model.showSetup)
+                    .accessibilityIdentifier("conversation.setup")
+                Spacer(minLength: 0)
+                Button("Clear / Borrar", action: model.clear)
+                    .accessibilityIdentifier("conversation.clear")
+            }.buttonStyle(.bordered).font(.callout.bold())
+        }
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(Theme.green.opacity(0.1))
+    }
+
+    private func updateRevealPreference() {
+        model.setRevealEnabled(!reduceMotion && !UIAccessibility.isVoiceOverRunning)
+    }
+}
+
+private struct CaptionPanel: View {
+    @ObservedObject var model: ConversationModel
+    let language: SourceLanguage
+    @ScaledMetric(relativeTo: .title2) private var captionSize = 25
+    @State private var followsNewest = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(language.displayName).font(.title3.bold())
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
             ScrollViewReader { scroll in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
@@ -131,51 +162,77 @@ struct ContentView: View {
                         }
                         ForEach(model.turns) { turn in
                             VStack(alignment: .leading, spacing: 6) {
-                                Text(turn.text(for: language) ?? (turn.translationFailed
-                                    ? (language == .english ? "Translation unavailable" : "Traducción no disponible")
-                                    : (language == .english ? "Translating…" : "Traduciendo…")))
+                                caption(turn, for: language)
                                     .font(.system(size: captionSize, weight: .semibold))
-                                    .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityIdentifier("caption.\(turn.sourceLanguage == language ? "source" : "translation").\(language == .english ? "english" : "spanish")")
-                                Text(turn.text(for: language.other) ?? (turn.translationFailed
-                                    ? "Translation unavailable / Traducción no disponible"
-                                    : "Translating… / Traduciendo…"))
+                                caption(turn, for: language.other)
                                     .font(.body).foregroundStyle(Theme.ink.opacity(0.8))
-                                    .fixedSize(horizontal: false, vertical: true)
                             }.frame(maxWidth: .infinity, alignment: .leading).id(turn.id)
                             Divider()
                         }
                     }.padding(.vertical, 4)
                 }
-                .onChange(of: model.turns) { _, turns in
-                    if let id = turns.last?.id { scroll.scrollTo(id, anchor: .bottom) }
+                .accessibilityIdentifier("captions.\(language == .english ? "english" : "spanish")")
+                .onScrollPhaseChange { _, phase in
+                    if phase == .tracking || phase == .interacting || phase == .decelerating {
+                        followsNewest = false
+                        model.finishReveal()
+                    }
+                }
+                .onChange(of: model.turns.last?.id) { _, id in
+                    followsNewest = true
+                    if let id { scroll.scrollTo(id, anchor: .top) }
+                }
+                .onChange(of: model.turns.last?.translation) { _, _ in
+                    if followsNewest, let id = model.turns.last?.id { scroll.scrollTo(id, anchor: .top) }
                 }
             }
-            Text(statusLabel(language)).font(.caption)
+            Text(statusLabel).font(.caption)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .accessibilityIdentifier("status.\(language == .english ? "english" : "spanish")")
             Button { model.speak(language) } label: {
-                Label(speakLabel(language), systemImage: model.phase == .recording && model.speaking == language ? "stop.fill" : "mic.fill")
-                    .font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                Label(speakLabel, systemImage: model.phase == .recording && model.speaking == language ? "stop.fill" : "mic.fill")
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 44)
                     .foregroundStyle(.white)
             }.buttonStyle(.borderedProminent)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .disabled(!model.isSample && (!model.ready || model.phase == .processing ||
                     (model.phase == .recording && model.speaking != language)))
                 .accessibilityIdentifier("speak.\(language == .english ? "english" : "spanish")")
         }
-        .padding(16).frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(10).frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(language == .english ? "English panel" : "Panel Español")
         .accessibilityIdentifier("panel.\(language == .english ? "english" : "spanish")")
     }
 
-    private func speakLabel(_ language: SourceLanguage) -> String {
+    // Reserve the final wrapped layout immediately and change only the ink.
+    // Accessibility always receives the entire caption, including hidden words.
+    private func caption(_ turn: ConversationTurn, for reader: SourceLanguage) -> some View {
+        let fullText = turn.text(for: reader) ?? (turn.translationFailed
+            ? (reader == .english ? "Translation unavailable" : "Traducción no disponible")
+            : (reader == .english ? "Translating." : "Traduciendo."))
+        let count = reader != turn.sourceLanguage && model.revealingTurnID == turn.id
+            ? (model.captionReveal?.visibleCharacters ?? fullText.count) : fullText.count
+        var content = AttributedString(String(fullText.prefix(count)))
+        var hidden = AttributedString(String(fullText.dropFirst(count)))
+        hidden.foregroundColor = .clear
+        content.append(hidden)
+        return Text(content)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityLabel(fullText)
+            .textSelection(.enabled)
+    }
+
+    private var speakLabel: String {
         if model.phase == .recording && model.speaking == language {
             return language == .english ? "Finish speaking" : "Terminar"
         }
         return language == .english ? "Speak English" : "Hablar español"
     }
 
-    private func statusLabel(_ language: SourceLanguage) -> String {
+    private var statusLabel: String {
         let parts = model.status.components(separatedBy: " / ")
         return (language == .english ? parts.first : parts.last) ?? model.status
     }

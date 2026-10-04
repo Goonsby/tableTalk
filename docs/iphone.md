@@ -2,7 +2,9 @@
 
 The `ios/` directory contains a native SwiftUI application for **iOS 18 or later**, alongside the existing Android apps. It is designed for two people sharing one phone across a table: English and Spanish captions appear on both halves, and the Spanish half faces the other person with a 180-degree rotation.
 
-This is an initial implementation for device testing. A successful build or simulator test does not verify real microphone recognition, installed language assets, translation quality, or offline operation. There is no signed IPA, TestFlight distribution, or App Store release from this work.
+Version **0.2.1, build 2** adds a gentle, cancellable reveal for translated captions. The complete translation is laid out immediately, so lines do not move as words appear. Original captions remain immediate. Manual scrolling takes over from automatic following and completes the reveal; clearing, a new turn, setup or backgrounding cancels it. Reduce Motion and VoiceOver display the complete translation immediately. Landscape uses side-by-side opposing panels, with scrollable captions at large text sizes; compact controls remain reachable.
+
+A successful build or simulator test does not verify real microphone recognition, installed language assets, translation quality, or offline operation. There is no signed IPA, TestFlight distribution, or App Store release from this work.
 
 ## Requirements and architecture
 
@@ -16,9 +18,11 @@ Apple's Translation framework handles English-to-Spanish and Spanish-to-English 
 
 ## Build and install
 
-On a Mac, clone the repository and run these commands from its root:
+The iPhone code is on **`codex/iphone-native`**, in [draft PR #2](https://github.com/Goonsby/tableTalk/pull/2); it has not been merged into `main`. On a Mac, use that branch:
 
 ```sh
+git clone --branch codex/iphone-native https://github.com/Goonsby/tableTalk.git
+cd tableTalk
 brew install xcodegen
 cd ios
 xcodegen generate
@@ -42,6 +46,17 @@ xcodebuild -project ios/TableTalk.xcodeproj -scheme TableTalk \
 ```
 
 The Windows checkout can be used to edit sources, but Apple's iOS SDK, Xcode build, and simulator require macOS. The repository's macOS CI is the automated path for Apple-platform build checks.
+
+### GitHub build downloads
+
+Open the successful **iPhone checks** run for the exact PR head commit and download **`tabletalk-iphone-checks`** from its Artifacts section. The bundle includes:
+
+- `TableTalk-iPhone-Source.zip`: the native source and this guide. Extract on a Mac, run `xcodegen generate --spec ios/project.yml`, then open `ios/TableTalk.xcodeproj` and follow the Personal Team/device steps above. Install XcodeGen first if needed.
+- `TableTalk-iPhone-Unsigned.zip`: a compiled ARM64 Release `.app`, built with signing disabled. It is compilation evidence and **cannot be installed directly on a phone**.
+- `TableTalk-iPhone-Simulator.zip`: the Debug simulator `.app`; **cannot run on a physical iPhone**.
+- `build-info.json`: exact workflow and source-head commits, version/build, file sizes/checksums and signing limits. PR workflows test their synthetic merge commit; `head_commit` identifies the matching PR head. Logs, screenshots and `.xcresult` record the checks.
+
+The checked-in project uses automatic signing but does not specify Henry's development team, and CI deliberately disables signing. Downloading either compiled ZIP does not install the app. The next owner step is **select Personal Team and Product > Run on the connected iPhone in Xcode**. If no Mac with Xcode is available, phone installation remains blocked by an authorized signing/distribution route; this task does not create credentials or upload to TestFlight.
 
 ## Prepare the phone while online
 
@@ -86,6 +101,7 @@ Record the commit, iPhone model, iOS version, language setup, elapsed response t
 - **Missing assets:** before setup, or after removing a downloaded translation language through system controls, check readiness offline. Confirm a visible failure. Restore assets and repeat both-direction testing.
 - **Declined permissions:** decline microphone and Speech access separately. Confirm useful feedback and that sample mode remains available. Re-enable permissions and retry.
 - **Layout and accessibility:** inspect both opposing panels and rotated controls, rotate the phone, use larger Dynamic Type settings, scroll long captions, and navigate with VoiceOver. Check that neither reader loses access to speaking or clearing controls.
+- **Caption reveal:** translate a longer turn in each direction. Check stable line wrapping, manual-scroll takeover, cancellation by a new turn/clear/background, and immediate complete captions with Reduce Motion or VoiceOver enabled.
 - **Privacy:** inspect the app switcher after backgrounding; confirm captions are gone on return. Verify that screenshots remain possible and communicate that limitation to participants.
 
 Facility permission for microphone-based transcription and device use still needs confirmation before a visit. This prototype is not a substitute for a qualified interpreter for legal, medical, or other consequential decisions.
