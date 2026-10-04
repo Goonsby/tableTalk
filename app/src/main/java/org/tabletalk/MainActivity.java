@@ -567,7 +567,8 @@ public final class MainActivity extends Activity {
         correctionDialog = new AlertDialog.Builder(this)
                 .setTitle("Edit last transcript")
                 .setMessage("Correct the original " + (last.sourceLanguage == Language.ENGLISH ? "English" : "Spanish")
-                        + " text. The old translation will be replaced.")
+                        + " text. The old translation will be replaced."
+                        + (demo ? " Sample corrections use fixed preview text, not real translation." : ""))
                 .setView(input)
                 .setNegativeButton("Cancel", (dialog, which) -> {
                     setStatus("Correction cancelled. Choose a language or edit again.", "ESPERE. El operador dará la señal para hablar.");
@@ -602,8 +603,12 @@ public final class MainActivity extends Activity {
         render();
         if (demo) {
             postSampleStep(epoch, 800, () -> {
-                ledger.finish(epoch, last.id, "Sample translation: " + last.source, false);
-                finishStatus(epoch, "Sample correction complete — microphone off.", "ESPERE. El operador dará la señal para hablar.", false);
+                String preview = last.sourceLanguage == Language.ENGLISH
+                        ? "Ejemplo de traducción. Este texto no se ha traducido; el micrófono está apagado."
+                        : "Translation preview only. This edited text has not been translated; microphone is off.";
+                ledger.finish(epoch, last.id, preview, false);
+                finishStatus(epoch, "Sample correction complete - fixed preview only, microphone off.",
+                        "EJEMPLO. Texto de muestra, no una traducción real. Micrófono apagado.", false);
             });
         } else {
             inferenceWorker.execute(() -> {

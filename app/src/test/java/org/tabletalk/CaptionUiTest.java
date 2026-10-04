@@ -63,6 +63,8 @@ public class CaptionUiTest {
     private static final AtomicInteger captureCalls = new AtomicInteger();
     private static final AtomicInteger speechCalls = new AtomicInteger();
     private static final AtomicInteger translationCalls = new AtomicInteger();
+    private static final String SPANISH_EDIT_PREVIEW = "Ejemplo de traducción. Este texto no se ha traducido; el micrófono está apagado.";
+    private static final String ENGLISH_EDIT_PREVIEW = "Translation preview only. This edited text has not been translated; microphone is off.";
     private static final String[] CONTROLS = {"operatorSpeakEnglish", "operatorListenSpanish", "operatorStop",
             "operatorRetry", "operatorEdit", "operatorClear", "operatorSetup", "operatorFlip"};
     private ActivityController<MainActivity> controller;
@@ -185,29 +187,50 @@ public class CaptionUiTest {
         screenshot("whipple-portrait-repeated-turns.png");
     }
     @Test public void operatorCorrectionReplacesLatestTurnAndRejectsBlankText() throws Exception {
-        complete("operatorSpeakEnglish");
-        ConversationLedger.Turn original = last();
-        int count = ledger().snapshot().size();
-        long oldEpoch = ledger().epoch();
-        control("operatorEdit").performClick();
-        AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
-        assertNotNull(dialog);
-        EditText input = dialog.getWindow().getDecorView().findViewWithTag("correctionTranscript");
-        assertNotNull(input);
-        assertEquals(original.source, input.getText().toString());
-        input.setText("   "); dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-        assertTrue("Blank correction keeps the dialog open", dialog.isShowing());
-        assertEquals(original.source, last().source);
-        String corrected = "I would like to call my family tomorrow, after lunch.";
-        input.setText(corrected); dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-        assertFalse(dialog.isShowing()); phase("TRANSLATING");
-        assertEquals(count, ledger().snapshot().size()); assertEquals(original.id, last().id);
-        assertEquals(corrected, last().source); assertNull(last().translation);
-        assertFalse(ledger().finish(oldEpoch, original.id, "A stale translation", false));
-        idle(800); phase("READY");
-        assertTrue(last().translation.contains(corrected));
-        assertTrue(allText().contains(corrected)); assertFalse(allText().contains("A stale translation"));
-        layout(360, 640); screenshot("whipple-portrait-corrected-sample.png");
+        for (Language language : new Language[]{Language.ENGLISH, Language.SPANISH}) {
+            complete(language == Language.ENGLISH ? "operatorSpeakEnglish" : "operatorListenSpanish");
+            ConversationLedger.Turn original = last();
+            int count = ledger().snapshot().size();
+            long oldEpoch = ledger().epoch();
+            control("operatorEdit").performClick();
+            AlertDialog dialog = ShadowAlertDialog.getLatestAlertDialog();
+            assertNotNull(dialog);
+            assertTrue("Sample editor must disclose that correction is a preview",
+                    textWithin(dialog.getWindow().getDecorView()).toLowerCase().contains("preview"));
+            EditText input = dialog.getWindow().getDecorView().findViewWithTag("correctionTranscript");
+            assertNotNull(input);
+            assertEquals(original.source, input.getText().toString());
+            input.setText("   "); dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertTrue("Blank correction keeps the dialog open", dialog.isShowing());
+            assertEquals(original.source, last().source);
+            String corrected = language == Language.ENGLISH
+                    ? "I would like to call my family tomorrow, after lunch."
+                    : "Me gustaría llamar a mi familia mañana, después del almuerzo.";
+            input.setText(corrected); dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            assertFalse(dialog.isShowing()); phase("TRANSLATING");
+            assertEquals(count, ledger().snapshot().size()); assertEquals(original.id, last().id);
+            assertEquals(corrected, last().source); assertNull(last().translation);
+            assertFalse(ledger().finish(oldEpoch, original.id, "A stale translation", false));
+            idle(800); phase("READY");
+            assertEquals(language == Language.ENGLISH ? SPANISH_EDIT_PREVIEW : ENGLISH_EDIT_PREVIEW, last().translation);
+            assertTrue("The corrected original must remain available to the operator",
+                    textWithin(tagged("operatorPanel")).contains(corrected));
+            String viewer = textWithin(tagged("viewerPanel"));
+            if (language == Language.ENGLISH) {
+                assertTrue(viewer.contains(SPANISH_EDIT_PREVIEW));
+                assertFalse("English corrected text must never be labelled as a Spanish translation", viewer.contains(corrected));
+                assertFalse(viewer.contains(ENGLISH_EDIT_PREVIEW));
+            } else {
+                assertTrue("Spanish source remains readable by its speaker", viewer.contains(corrected));
+                assertFalse("English preview belongs to the operator", viewer.contains(ENGLISH_EDIT_PREVIEW));
+            }
+            assertTrue("Sample status must disclose preview mode", textWithin(tagged("operatorStatus")).toLowerCase().contains("preview"));
+            assertPassiveViewer();
+            assertFalse(allText().contains("A stale translation"));
+            idle(13000); layout(360, 640); assertAnchoredControlsVisible();
+            screenshot(language == Language.ENGLISH ? "whipple-portrait-corrected-sample.png"
+                    : "whipple-portrait-corrected-spanish-source-preview.png");
+        }
     }
     @Test public void retryDuringProcessingCancelsOldSampleBeforeStartingNewCapture() throws Exception {
         int count = ledger().snapshot().size();
@@ -259,7 +282,8 @@ public class CaptionUiTest {
         assertFalse(ledger().finish(oldEpoch, turnId, "Obsolete original translation", false));
         idle(2000); phase("READY");
         assertEquals(turnId, last().id); assertEquals(corrected, last().source);
-        assertEquals("Sample translation: " + corrected, last().translation);
+        assertEquals(SPANISH_EDIT_PREVIEW, last().translation);
+        assertFalse(textWithin(tagged("viewerPanel")).contains(corrected));
         assertFalse(allText().contains("Obsolete original translation"));
     }
     @Test public void clearingCancelsEveryPendingSampleStageAndLateTranslation() throws Exception {
