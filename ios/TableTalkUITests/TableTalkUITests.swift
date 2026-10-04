@@ -290,7 +290,35 @@ final class TableTalkUITests: XCTestCase {
         app.buttons["viewer.flip"].tap()
         XCTAssertEqual(translation.label, longSpanish)
         XCTAssertTrue(spanish.isHittable)
-        spanish.swipeDown()
+        let screenFrame = app.frame
+        let flippedViewport = spanish.frame.intersection(screenFrame)
+        XCTAssertTrue(screenFrame.insetBy(dx: -2, dy: -2).contains(spanish.frame),
+                      "The flipped Spanish caption viewport must remain within the screen.")
+        // An element swipe on a rotated ScrollView can start at the system top
+        // edge. Use app coordinates strictly inside the visible caption viewport.
+        let dragArea = flippedViewport.insetBy(dx: 24, dy: 24)
+            .intersection(screenFrame.insetBy(dx: 24, dy: 24))
+        XCTAssertGreaterThan(dragArea.width, 0)
+        XCTAssertGreaterThan(dragArea.height, 40,
+                             "The flipped viewport must allow a meaningful interior drag.")
+        let beforeFlippedScroll = try captionInteriorPixels(translation, inside: spanish)
+        attachPNG(beforeFlippedScroll, name: "Flipped Spanish caption interior - before scroll")
+        attachScreenshot("Landscape largest text - flipped viewer before interior scroll")
+        let screenOrigin = app.coordinate(withNormalizedOffset: .zero)
+        let dragStart = screenOrigin.withOffset(CGVector(
+            dx: dragArea.midX - screenFrame.minX,
+            dy: dragArea.minY + dragArea.height * 0.25 - screenFrame.minY))
+        let dragEnd = screenOrigin.withOffset(CGVector(
+            dx: dragArea.midX - screenFrame.minX,
+            dy: dragArea.minY + dragArea.height * 0.75 - screenFrame.minY))
+        dragStart.press(forDuration: 0.05, thenDragTo: dragEnd)
+        waitForScrollToSettle()
+        let afterFlippedScroll = try captionInteriorPixels(translation, inside: spanish)
+        attachPNG(afterFlippedScroll, name: "Flipped Spanish caption interior - after scroll")
+        attachScreenshot("Landscape largest text - flipped viewer after interior scroll")
+        XCTAssertNotEqual(afterFlippedScroll, beforeFlippedScroll,
+                          "The flipped Spanish viewer must scroll long captions within its viewport.")
+        XCTAssertEqual(translation.label, longSpanish)
         assertOperatorOwnsConversationControls()
         attachScreenshot("Landscape largest text - operator flipped Spanish viewer")
     }
@@ -313,13 +341,22 @@ final class TableTalkUITests: XCTestCase {
 
     @MainActor
     private func assertOperatorOwnsConversationControls() {
-        let viewer = app.descendants(matching: .any)["panel.spanish"]
-        let operatorPanel = app.descendants(matching: .any)["panel.english"]
+        // Rotation and scrolling can briefly rebuild SwiftUI accessibility
+        // containers. Resolve fresh queries while waiting for both panels.
+        let panelsReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate { [self] _, _ in
+                app.descendants(matching: .any).matching(identifier: "panel.spanish").firstMatch.exists
+                    && app.descendants(matching: .any).matching(identifier: "panel.english").firstMatch.exists
+            }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [panelsReady], timeout: 5), .completed,
+                       "Both language panels must remain accessible after layout changes.")
+        let viewer = app.descendants(matching: .any).matching(identifier: "panel.spanish").firstMatch
+        let operatorPanel = app.descendants(matching: .any).matching(identifier: "panel.english").firstMatch
         XCTAssertTrue(viewer.exists)
         XCTAssertTrue(operatorPanel.exists)
         XCTAssertEqual(viewer.buttons.count, 0, "The Spanish viewer must remain text-only.")
         let instructions = viewer.staticTexts["viewer.instructions"]
-        XCTAssertTrue(instructions.exists)
+        XCTAssertTrue(instructions.waitForExistence(timeout: 5))
         XCTAssertFalse(instructions.label.isEmpty)
         for identifier in ["speak.english", "speak.spanish", "conversation.stop",
                            "conversation.retry", "conversation.correct", "viewer.flip",
@@ -413,7 +450,9 @@ final class TableTalkUITests: XCTestCase {
         let ready = XCTNSPredicateExpectation(
             predicate: NSPredicate(format: "enabled == true"),
             object: app.buttons["speak.english"])
-        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 10), .completed)
+        // Simulator accessibility snapshots can arrive after the final ten-
+        // second poll even though the sample has already returned to idle.
+        XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 15), .completed)
         XCTAssertTrue(app.buttons["speak.spanish"].isEnabled)
         XCTAssertFalse(app.buttons["conversation.stop"].isEnabled)
     }
@@ -520,11 +559,23 @@ final class TableTalkUITests: XCTestCase {
 
     @MainActor
     private func assertAppIsBackgrounded() {
-        // iOS can suspend the application before XCTest observes the ordinary
-        // background state; either state confirms it has left the foreground.
-        let backgrounded = app.wait(for: .runningBackground, timeout: 10)
-            || app.wait(for: .runningBackgroundSuspended, timeout: 5)
-        XCTAssertTrue(backgrounded, "The app must be backgrounded or suspended before it is reactivated.")
+        func waitUntilForegroundEnds(timeout: TimeInterval) -> Bool {
+            let leftForeground = XCTNSPredicateExpectation(
+                predicate: NSPredicate { [self] _, _ in app.state != .runningForeground },
+                object: nil)
+            return XCTWaiter.wait(for: [leftForeground], timeout: timeout) == .completed
+        }
+        var leftForeground = waitUntilForegroundEnds(timeout: 10)
+        if !leftForeground && app.state == .runningForeground {
+            // The first Home event can be lost during a cold simulator launch.
+            XCUIDevice.shared.press(.home)
+            leftForeground = waitUntilForegroundEnds(timeout: 10)
+        }
+        XCTAssertTrue(leftForeground, "Home must move the app out of the foreground before reactivation.")
+        XCTAssertNotEqual(app.state, .notRunning, "Backgrounding must preserve the running app process.")
+        XCTAssertNotEqual(app.state, .unknown, "The background lifecycle state must be observable.")
+        // Each caller reactivates the app and checks setup plus cleared private
+        // conversation data, so leaving the foreground alone is insufficient.
     }
 
     @MainActor
