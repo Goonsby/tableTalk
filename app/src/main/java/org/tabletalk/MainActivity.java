@@ -342,12 +342,13 @@ public final class MainActivity extends Activity {
         control.setTag(tag);
         compactOperatorText(control, 14);
         control.setMinHeight(dp(48));
+        control.setMinimumHeight(dp(48));
+        control.setPadding(dp(4), dp(4), dp(4), dp(4));
         return control;
     }
-    private void operatorRow(LinearLayout target, Button first, Button second) {
+    private void operatorRow(LinearLayout target, Button... controls) {
         LinearLayout row = new LinearLayout(this);
-        row.addView(first, new LinearLayout.LayoutParams(0, -2, 1));
-        row.addView(second, new LinearLayout.LayoutParams(0, -2, 1));
+        for (Button control : controls) row.addView(control, new LinearLayout.LayoutParams(0, dp(48), 1));
         target.addView(row, new LinearLayout.LayoutParams(-1, -2));
     }
     private void compactOperatorText(TextView view, int size) {
@@ -357,21 +358,25 @@ public final class MainActivity extends Activity {
     }
     private void addOperatorControls(LinearLayout target) {
         speakEnglishButton = operatorButton("Speak English", "operatorSpeakEnglish", () -> speak(Language.ENGLISH));
-        listenSpanishButton = operatorButton("Listen to Spanish", "operatorListenSpanish", () -> speak(Language.SPANISH));
-        stopButton = operatorButton("Stop current turn", "operatorStop", this::stopCurrentTurn);
-        retryButton = operatorButton("Retry last capture", "operatorRetry", this::retryLastCapture);
-        editButton = operatorButton("Edit last transcript", "operatorEdit", this::editLastTranscript);
+        listenSpanishButton = operatorButton("Listen Spanish", "operatorListenSpanish", () -> speak(Language.SPANISH));
+        listenSpanishButton.setContentDescription("Listen to Spanish");
+        stopButton = operatorButton("Stop", "operatorStop", this::stopCurrentTurn);
+        stopButton.setContentDescription("Stop current turn");
+        retryButton = operatorButton("Retry", "operatorRetry", this::retryLastCapture);
+        editButton = operatorButton("Edit", "operatorEdit", this::editLastTranscript);
+        editButton.setContentDescription("Edit last transcript and translate again");
         operatorRow(target, speakEnglishButton, listenSpanishButton);
-        operatorRow(target, stopButton, retryButton);
-        operatorRow(target, editButton, operatorButton("Flip Spanish view", "operatorFlip", () -> {
+        operatorRow(target, stopButton, retryButton, editButton);
+        Button flip = operatorButton("Flip", "operatorFlip", () -> {
             spanishFlipped = !spanishFlipped;
             spanishPanel.container.setRotation(spanishFlipped ? 180 : 0);
-        }));
+        });
+        flip.setContentDescription("Flip Spanish view for counter or tabletop reading");
         operatorRow(target, operatorButton("Clear", "operatorClear", () -> {
             cancelAndClear();
             setStatus(demo ? "Sample layout — microphone off. Conversation cleared." : "Conversation cleared. Choose a language.",
                     "ESPERE. El operador dará la señal para hablar.");
-        }), operatorButton("Setup", "operatorSetup", this::showSetup));
+        }), flip, operatorButton("Setup", "operatorSetup", this::showSetup));
         retryButton.setContentDescription("Record a new capture in the last requested language");
     }
     private void speak(Language language) {
@@ -788,7 +793,10 @@ public final class MainActivity extends Activity {
                 scroll.setOnTouchListener((view, event) -> true);
                 scroll.setOnGenericMotionListener((view, event) -> true);
             } else {
-                addOperatorControls(reading);
+                LinearLayout controls = column();
+                controls.setTag("operatorControls");
+                addOperatorControls(controls);
+                container.addView(controls, new LinearLayout.LayoutParams(-1, -2));
             }
             captions.setTag(viewer ? "viewerCaptions" : "operatorCaptions");
             reading.addView(captions, new LinearLayout.LayoutParams(-1, -2));

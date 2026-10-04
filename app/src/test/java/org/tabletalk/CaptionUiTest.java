@@ -6,6 +6,7 @@ import static org.robolectric.Shadows.shadowOf;
 import android.app.AlertDialog;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.KeyEvent;
@@ -132,6 +133,7 @@ public class CaptionUiTest {
         control("operatorFlip").performClick();
         assertEquals(0f, viewer.getRotation(), 0f);
         assertTrue((activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+        assertAnchoredControlsVisible();
         screenshot("whipple-portrait-ready-font100.png");
     }
     @Test public void actualSampleButtonsShowListeningTranscribingAndTranslating() throws Exception {
@@ -143,18 +145,18 @@ public class CaptionUiTest {
             assertFalse(tag + " must be disabled during capture", control(tag).isEnabled());
         assertTrue(textWithin(tagged("viewerPanel")).toLowerCase().contains("hable"));
         assertPassiveViewer();
-        layout(360, 640); screenshot("whipple-portrait-listening-spanish.png");
+        layout(360, 640); assertAnchoredControlsVisible(); screenshot("whipple-portrait-listening-spanish.png");
         control("operatorStop").performClick();
         phase("TRANSCRIBING");
         assertTrue("Operator can cancel processing", control("operatorStop").isEnabled());
         assertTrue(textWithin(tagged("viewerPanel")).toLowerCase().contains("espere"));
-        layout(360, 640); screenshot("whipple-portrait-transcribing.png");
+        layout(360, 640); assertAnchoredControlsVisible(); screenshot("whipple-portrait-transcribing.png");
         idle(1200); phase("TRANSLATING");
         assertEquals(before + 1, ledger().snapshot().size());
         assertEquals(Language.SPANISH, last().sourceLanguage);
         assertNull(last().translation);
         assertTrue(textWithin(tagged("operatorPanel")).contains(last().source));
-        layout(360, 640); screenshot("whipple-portrait-translating.png");
+        layout(360, 640); assertAnchoredControlsVisible(); screenshot("whipple-portrait-translating.png");
         idle(800); phase("READY");
         assertNotNull(last().translation);
         assertTrue(control("operatorEdit").isEnabled());
@@ -162,6 +164,7 @@ public class CaptionUiTest {
         assertFalse(control("operatorStop").isEnabled());
         assertTrue(textWithin(tagged("viewerPanel")).contains(last().source));
         assertFalse(textWithin(tagged("viewerPanel")).contains(last().translation));
+        layout(360, 640); assertAnchoredControlsVisible();
     }
     @Test public void repeatAndRetryUseTheOperatorAndKeepBoundedHistory() throws Exception {
         complete("operatorListenSpanish");
@@ -305,8 +308,9 @@ public class CaptionUiTest {
         CaptionScrollView scroll = (CaptionScrollView) field(panel("englishPanel"), "scroll");
         assertTrue(scroll.getChildAt(0).getHeight() > scroll.getHeight());
         invoke(activity, "setStatus", new Class<?>[]{String.class, String.class}, "Ready", "Listo"); invoke(activity, "render");
-        assertSame(caption, revealing(full)); screenshot("whipple-portrait-long-caption-partial.png");
+        assertSame(caption, revealing(full)); assertAnchoredControlsVisible(); screenshot("whipple-portrait-long-caption-partial.png");
         idle(13000); assertEquals(full.length(), caption.getRevealedEnd());
+        assertAnchoredControlsVisible();
         screenshot("whipple-portrait-long-caption-complete.png");
     }
     @Test public void newTurnCancelsPreviousRevealWithoutLosingOperatorTranscript() throws Exception {
@@ -353,7 +357,21 @@ public class CaptionUiTest {
             assertPassiveViewer(); View operator = tagged("operatorPanel"), viewer = tagged("viewerPanel");
             if (size[0] > size[1]) assertEquals(operator.getTop(), viewer.getTop());
             else assertTrue(viewer.getBottom() <= operator.getTop());
-            screenshot("whipple-panels-" + size[0] + "x" + size[1] + "-font" + size[2] + ".png");
+            String prefix = "whipple-panels-" + size[0] + "x" + size[1] + "-font" + size[2];
+            assertAnchoredControlsVisible(); screenshot(prefix + ".png");
+            String longCaption = "I want time to explain everything carefully without losing the operator controls. ".repeat(16);
+            addTurn(Language.SPANISH, "Me gustaría hablar de mi familia con calma.", longCaption);
+            layout(size[0], size[1]); assertAnchoredControlsVisible();
+            idle(13000); layout(size[0], size[1]); assertAnchoredControlsVisible();
+            assertEquals(longCaption.length(), revealing(longCaption).getRevealedEnd());
+            screenshot(prefix + "-long-caption-complete.png");
+            control("operatorListenSpanish").performClick(); phase("RECORDING");
+            layout(size[0], size[1]); assertAnchoredControlsVisible(); screenshot(prefix + "-recording.png");
+            control("operatorStop").performClick(); phase("TRANSCRIBING");
+            layout(size[0], size[1]); assertAnchoredControlsVisible();
+            idle(1200); phase("TRANSLATING"); layout(size[0], size[1]); assertAnchoredControlsVisible();
+            idle(800); phase("READY"); idle(13000); layout(size[0], size[1]);
+            assertAnchoredControlsVisible(); screenshot(prefix + "-completed.png");
         }
     }
     @Test public void recreationCancelsRevealAndNeverRestoresPrivateCaptions() throws Exception {
@@ -389,6 +407,37 @@ public class CaptionUiTest {
             assertFalse("Viewer long-click action " + view.getTag(), view.isLongClickable());
             assertFalse("Viewer focusable control " + view.getTag(), view.isFocusable());
         }
+    }
+    private void assertAnchoredControlsVisible() throws Exception {
+        ViewGroup root = (ViewGroup) root();
+        View operator = tagged("operatorPanel");
+        Rect operatorBounds = boundsInRoot(operator);
+        Rect viewport = new Rect(0, 0, root.getWidth(), root.getHeight());
+        float density = activity.getResources().getDisplayMetrics().density;
+        for (String tag : CONTROLS) {
+            Button button = control(tag);
+            assertEquals(tag + " must remain visible", View.VISIBLE, button.getVisibility());
+            assertTrue(tag + " needs a 48dp height", button.getHeight() >= 48 * density);
+            assertTrue(tag + " needs a 48dp width", button.getWidth() >= 48 * density);
+            for (View parent = button; parent != null && parent != root;
+                    parent = parent.getParent() instanceof View ? (View) parent.getParent() : null) {
+                assertFalse(tag + " must be anchored outside the caption scroll region", parent instanceof CaptionScrollView);
+                assertEquals(tag + " has a hidden ancestor", View.VISIBLE, parent.getVisibility());
+            }
+            Rect bounds = boundsInRoot(button);
+            assertTrue(tag + " leaves the operator panel: " + bounds + " / " + operatorBounds,
+                    operatorBounds.contains(bounds));
+            assertTrue(tag + " leaves the actual screenshot viewport: " + bounds + " / " + viewport,
+                    viewport.contains(bounds));
+            assertNotNull(button.getLayout());
+            assertTrue(tag + " text must fit inside its touch target",
+                    button.getLayout().getHeight() <= button.getHeight() - button.getCompoundPaddingTop() - button.getCompoundPaddingBottom());
+        }
+    }
+    private Rect boundsInRoot(View view) throws Exception {
+        Rect bounds = new Rect(0, 0, view.getWidth(), view.getHeight());
+        ((ViewGroup) root()).offsetDescendantRectToMyCoords(view, bounds);
+        return bounds;
     }
     private boolean within(View child, View parent) {
         for (View view = child; view != null; view = view.getParent() instanceof View ? (View) view.getParent() : null) if (view == parent) return true;
