@@ -129,11 +129,16 @@ struct ContentView: View {
     private var viewer: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Whipple Chat · Español").font(.headline)
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-            Text(model.viewerInstruction)
+                .dynamicTypeSize(...DynamicTypeSize.large)
+            if model.isSample {
+                Text("EJEMPLO · MICRÓFONO APAGADO").font(.caption.bold())
+                    .dynamicTypeSize(...DynamicTypeSize.large)
+            }
+            Text(model.viewerInstruction.replacingOccurrences(of: "EJEMPLO. Micrófono apagado. ", with: ""))
                 .font(.title2.bold())
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(model.viewerInstruction)
                 .accessibilityIdentifier("viewer.instructions")
             CaptionHistory(model: model, language: .spanish, showCounterpart: false)
         }
@@ -146,10 +151,10 @@ struct ContentView: View {
 
     private func operatorPanel(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Whipple Chat · English operator").font(.headline)
-                .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+            Text("Whipple Chat · Operator").font(.headline)
+                .dynamicTypeSize(...DynamicTypeSize.large)
             Text(model.operatorInstruction).font(.caption.bold())
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .dynamicTypeSize(...DynamicTypeSize.large)
                 .accessibilityIdentifier("operator.instructions")
             if model.isSample {
                 Text("SAMPLE · MICROPHONE OFF").font(.caption.bold())
@@ -162,22 +167,8 @@ struct ContentView: View {
                 operatorButton("Speak English", id: "speak.english", enabled: model.phase == .idle) { model.speak(.english) }
                 operatorButton("Listen to Spanish", id: "speak.spanish", enabled: model.phase == .idle) { model.speak(.spanish) }
             }
-            if compact {
-                HStack(spacing: 6) {
-                    stopButton
-                    retryButton
-                    correctionButton(short: true)
-                }
-                HStack(spacing: 6) {
-                    clearButton
-                    flipButton(short: true)
-                    setupButton
-                }
-            } else {
-                HStack(spacing: 6) { stopButton; retryButton }
-                HStack(spacing: 6) { correctionButton(short: false); clearButton }
-                HStack(spacing: 6) { flipButton(short: false); setupButton }
-            }
+            HStack(spacing: 6) { stopButton; retryButton; correctionButton(short: true) }
+            HStack(spacing: 6) { clearButton; flipButton(short: true); setupButton }
         }
         .padding(10).frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.green.opacity(0.06))

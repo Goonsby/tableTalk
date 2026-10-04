@@ -97,7 +97,7 @@ final class TableTalkUITests: XCTestCase {
     func testBackgroundingClearsConversationAndRequiresSetup() {
         openSample()
         XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        assertAppIsBackgrounded()
         app.activate()
         XCTAssertTrue(app.buttons["setup.startSample"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["demo.label"].exists)
@@ -196,7 +196,7 @@ final class TableTalkUITests: XCTestCase {
         openSample(arguments: slowLongArguments)
         XCTAssertEqual(app.staticTexts["caption.translation.spanish"].label, longSpanish)
         XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        assertAppIsBackgrounded()
         app.activate()
         XCTAssertTrue(app.buttons["setup.startSample"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["demo.label"].exists)
@@ -391,7 +391,8 @@ final class TableTalkUITests: XCTestCase {
             XCTAssertTrue(editedText?.contains(correction.trimmingCharacters(in: .whitespaces)) == true)
             app.buttons["correction.translate"].tap()
             XCTAssertFalse(editor.exists)
-            XCTAssertEqual(app.staticTexts["caption.source.\(sourceLanguage)"].label, editedText)
+            XCTAssertEqual(app.staticTexts["caption.source.\(sourceLanguage)"].label,
+                           editedText?.trimmingCharacters(in: .whitespacesAndNewlines))
             XCTAssertEqual(app.staticTexts["caption.translation.\(targetLanguage)"].label, preview,
                            "Sample editing must never claim that the microphone-off preview is a real translation.")
             XCTAssertEqual(app.staticTexts.matching(identifier: "caption.source.\(sourceLanguage)").count, 1)
@@ -473,7 +474,7 @@ final class TableTalkUITests: XCTestCase {
         app.buttons["conversation.stop"].tap()
         waitForViewerStage("traduciendo")
         XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        assertAppIsBackgrounded()
         app.activate()
         XCTAssertTrue(app.buttons["setup.startSample"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["demo.label"].exists)
@@ -492,7 +493,7 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertTrue(draft?.contains("Discard this draft.") == true)
 
         XCUIDevice.shared.press(.home)
-        XCTAssertTrue(app.wait(for: .runningBackground, timeout: 5))
+        assertAppIsBackgrounded()
         app.activate()
         XCTAssertTrue(app.buttons["setup.startSample"].waitForExistence(timeout: 5))
         XCTAssertFalse(editor.exists)
@@ -508,5 +509,14 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts.matching(identifier: "caption.source.english").count, 1)
         XCTAssertFalse(app.staticTexts[draft ?? "Discard this draft."].exists)
         assertOperatorOwnsConversationControls()
+    }
+
+    @MainActor
+    private func assertAppIsBackgrounded() {
+        // iOS can suspend the application before XCTest observes the ordinary
+        // background state; either state confirms it has left the foreground.
+        let backgrounded = app.wait(for: .runningBackground, timeout: 10)
+            || app.wait(for: .runningBackgroundSuspended, timeout: 5)
+        XCTAssertTrue(backgrounded, "The app must be backgrounded or suspended before it is reactivated.")
     }
 }
