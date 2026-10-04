@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.LooperMode;
 import org.robolectric.annotation.GraphicsMode;
@@ -53,7 +54,40 @@ public class RevealingTextViewTest {
         activity.setContentView(container);
     }
 
-    @After public void destroyView() { controller.pause().stop().destroy(); }
+    @After public void destroyView() {
+        controller.pause().stop().destroy();
+        RuntimeEnvironment.setFontScale(1f);
+    }
+
+    @Test public void largeFontCaptionsKeepCompleteWrappingAndStableRevealInNarrowAndWideViews() throws Exception {
+        RuntimeEnvironment.setFontScale(2f);
+        caption.setTextSize(24);
+        for (int widthDp : new int[]{240, 560}) {
+            String full = "Me gustaría explicar lo que pasó ayer sin perder ninguna palabra. "
+                    + "We can talk about your family, your health, and everything that matters.\n\n"
+                    + "Anticonstitucionalmente: una palabra larga también debe caber. ".repeat(5);
+            caption.setText(full);
+            measureCaption(widthDp);
+            int height = caption.getHeight();
+            int lines = caption.getLineCount();
+            assertTrue("Two-times font size must wrap into multiple lines", lines > 6);
+            assertEquals("The final word must have a line in the layout", full.length(),
+                    caption.getLayout().getLineEnd(lines - 1));
+            assertNull("Long captions must never use ellipsis", caption.getEllipsize());
+            caption.startReveal(null);
+            assertTrue(caption.isRevealing());
+            saveCaptionScreenshot("caption-font200-width" + widthDp + "-partial.png");
+            shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(13));
+            measureCaption(widthDp);
+            assertEquals("Reveal must keep the complete caption height", height, caption.getHeight());
+            assertEquals("Reveal must keep line wrapping stable", lines, caption.getLineCount());
+            assertEquals(full.length(), caption.getRevealedEnd());
+            AccessibilityNodeInfo node = caption.createAccessibilityNodeInfo();
+            assertEquals(full, node.getText().toString());
+            node.recycle();
+            saveCaptionScreenshot("caption-font200-width" + widthDp + "-complete.png");
+        }
+    }
 
     @Test public void englishAndSpanishWrapCompletelyWithoutChangingLayoutDuringReveal() {
         for (String sentence : new String[]{
@@ -191,6 +225,16 @@ public class RevealingTextViewTest {
         Bitmap bitmap = Bitmap.createBitmap(caption.getWidth(), caption.getHeight(), Bitmap.Config.ARGB_8888);
         caption.draw(new Canvas(bitmap));
         return bitmap;
+    }
+
+    private void saveCaptionScreenshot(String name) throws Exception {
+        Bitmap bitmap = onWhite(drawCaption());
+        File directory = new File("build/reports/caption-screenshots");
+        assertTrue(directory.isDirectory() || directory.mkdirs());
+        try (FileOutputStream stream = new FileOutputStream(new File(directory, name))) {
+            assertTrue(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream));
+        }
+        bitmap.recycle();
     }
 
     private Bitmap onWhite(Bitmap original) {

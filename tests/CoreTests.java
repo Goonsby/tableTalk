@@ -11,6 +11,7 @@ public final class CoreTests {
     }
     public static void main(String[] args) throws Exception {
         checkTranslationReveal();
+        checkCorrections();
         ConversationLedger ledger = new ConversationLedger();
         long epoch = ledger.epoch();
         long id = ledger.addSource(epoch, Language.SPANISH, "Estoy preocupado por mi familia.");
@@ -116,6 +117,44 @@ public final class CoreTests {
         check(progress[0] == large.length && java.util.Arrays.equals(large, output.toByteArray()),
                 "multi-buffer copy preserves every byte");
         System.out.println("Passed " + checked + " core behavior checks.");
+    }
+
+    private static void checkCorrections() {
+        ConversationLedger ledger = new ConversationLedger();
+        long oldEpoch = ledger.epoch();
+        long id = ledger.addSource(oldEpoch, Language.SPANISH, "Me duele el brazo.");
+        ledger.finish(oldEpoch, id, "My arm hurts.", false);
+        long correctedEpoch = ledger.reviseLastSource(oldEpoch, id, "  Me duele la mano.  ");
+        check(correctedEpoch > oldEpoch, "correction advances the work generation");
+        ConversationLedger.Turn corrected = ledger.snapshot().get(0);
+        check(corrected.id == id && corrected.sourceLanguage == Language.SPANISH
+                && ledger.snapshot().size() == 1, "correction replaces the same last turn without adding history");
+        check(corrected.source.equals("Me duele la mano.") && corrected.translation == null
+                && !corrected.translationFailed, "correction clears the old translation and keeps trimmed original");
+        check(!ledger.finish(oldEpoch, id, "stale arm translation", false)
+                && ledger.addSource(oldEpoch, Language.ENGLISH, "stale capture") == -1,
+                "correction rejects stale translation and recognition");
+        check(ledger.finish(correctedEpoch, id, "My hand hurts.", false), "new correction generation can translate");
+        check(ledger.reviseLastSource(correctedEpoch, id, "   ") == -1
+                && ledger.epoch() == correctedEpoch && ledger.snapshot().get(0).translation.equals("My hand hurts."),
+                "blank correction leaves source translation and generation unchanged");
+        check(ledger.reviseLastSource(oldEpoch, id, "stale editor") == -1, "stale editor generation is rejected");
+        long newer = ledger.addSource(correctedEpoch, Language.ENGLISH, "Please tell me more.");
+        check(ledger.reviseLastSource(correctedEpoch, id, "wrong turn") == -1,
+                "an editor cannot overwrite an older turn after another capture");
+        ledger.finish(correctedEpoch, newer, null, true);
+        long retryEpoch = ledger.reviseLastSource(correctedEpoch, newer, "Please tell me a little more.");
+        check(!ledger.snapshot().get(1).translationFailed && ledger.snapshot().get(1).translation == null,
+                "editing a failed translation resets its result");
+        ledger.finish(retryEpoch, newer, null, true);
+        check(ledger.snapshot().get(1).source.equals("Please tell me a little more.")
+                && ledger.snapshot().get(1).translationFailed, "failed retranslation preserves corrected original");
+        long cancelled = ledger.invalidate();
+        check(ledger.snapshot().size() == 2 && !ledger.finish(retryEpoch, newer, "late result", false),
+                "operator cancellation preserves history while rejecting pending results");
+        ledger.clear();
+        check(ledger.reviseLastSource(cancelled, newer, "cleared editor") == -1 && ledger.snapshot().isEmpty(),
+                "clear prevents a correction from restoring conversation content");
     }
 
     private static void checkTranslationReveal() {

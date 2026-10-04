@@ -33,6 +33,16 @@ public final class ConversationLedger {
         }
         return false;
     }
+    /** Correct only the latest exact turn, invalidating recognition/translation from its old epoch. */
+    public synchronized long reviseLastSource(long expected, long id, String source) {
+        if (!isCurrent(expected) || turns.isEmpty() || source == null || source.trim().isEmpty()) return -1;
+        int index = turns.size() - 1;
+        Turn old = turns.get(index);
+        if (old.id != id) return -1;
+        ++epoch;
+        turns.set(index, new Turn(id, old.sourceLanguage, source.trim(), null, false));
+        return epoch;
+    }
     public synchronized List<Turn> snapshot() { return new ArrayList<>(turns); }
 
     public static final class Turn {

@@ -26,8 +26,8 @@ android {
             dimension = "network"
             applicationIdSuffix = ".poco"
             minSdk = 26
-            versionCode = 11
-            versionName = "0.2.1-poco-preview"
+            versionCode = 12
+            versionName = "0.2.2-whipple-preview"
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "ALLOW_MODEL_DOWNLOAD", "true")
             externalNativeBuild {

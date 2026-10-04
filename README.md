@@ -1,4 +1,14 @@
-# TableTalk
+# Whipple Chat
+
+Whipple Chat lets one English-speaking operator run a bilingual conversation while the Spanish-speaking viewer remains behind a counter or glass. The operator selects **Speak English** or **Listen to Spanish**, then **Stop**; the Spanish side has readable instructions and captions with no buttons. The operator can retry a turn, correct the latest transcript and translate it again, clear the conversation, or return to setup. Portrait puts the Spanish viewer above the controls; landscape puts it beside them. The viewer starts upright and can be flipped by the operator.
+
+The `codex/whipple-chat` preview combines the latest Android caption reveal and native iPhone work: Android **0.2.2-whipple-preview / code 12**, iPhone **0.2.2 / build 3**. Repository, package and bundle identifiers retain `TableTalk` for continuity. See the [operator and glass-counter guide](docs/whipple-chat.md) and [iPhone installation guide](docs/iphone.md). Original draft PRs and published Android downloads below remain historical builds.
+
+Speech and translation run locally after language setup. Captions appear after a speaking turn; translations reveal gently without reflowing their lines. Corrections and history stay in memory. Clear, setup and backgrounding cancel pending results and clear the conversation. Sample mode uses fixed text and explicitly keeps the microphone off.
+
+Phone audio through plexiglass is **not yet physically tested**. Glass may block or distort the other speaker's voice; the app cannot fix an unsuitable microphone path. Test the actual position and any permitted intercom or microphone arrangement before relying on it. The public [browser sample](https://tabletalk.igorio.space/) is a separate earlier demo and has not been redeployed by this preview.
+
+## Earlier Android builds
 
 ## Pocophone F1 edition (0.2.0 test build)
 
