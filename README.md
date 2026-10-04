@@ -2,6 +2,10 @@
 
 TableTalk lets two people share one phone across a table for English/Spanish conversation. This repository contains Android editions and a native iPhone app; each platform has its own installation and offline setup steps.
 
+## Browser demo
+
+Open [`demo/index.html`](demo/index.html) for a standalone, responsive preview of the two-sided conversation layout. Try three prepared conversations, either language, seat rotation, larger captions, and clearing. The demo is explicitly simulated: it never accesses a microphone, records audio, or performs speech recognition or translation. See the [demo guide](demo/README.md) for local preview, static hosting, and tests.
+
 ## iPhone edition
 
 The native SwiftUI app in [`ios/`](ios/) requires **iOS 18 or later**. It uses Apple's on-device Speech and Translation frameworks, with opposing English/Spanish panels, short speaking turns, memory-only history, and a labelled sample mode. Speech requests require on-device recognition; unavailable local assets cause a visible failure.
@@ -123,7 +127,7 @@ python3 scripts/check_apk_permissions.py \
 
 The core checks cover language routing, preserving original text on failed translation, bounded capture/history, silence rejection, and preventing late results from restoring cleared conversations. A GitHub Actions workflow is included to build both APKs, run lint, and inspect offline permissions when the project is pushed to a repository.
 
-Open [docs/ui-preview.html](docs/ui-preview.html) locally for a self-contained, interactive sample of the two-person layout. It never uses a microphone or performs inference.
+Open [demo/index.html](demo/index.html) locally for a self-contained, interactive sample of the two-person layout. It never uses a microphone or performs inference. The original `docs/ui-preview.html` entry point redirects there.
 
 ## Project map
 
