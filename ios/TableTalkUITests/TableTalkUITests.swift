@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 
 /// Sample mode exercises the real conversation view without speech services,
 /// microphone permissions, downloaded models, or live conversation data.
@@ -61,7 +62,7 @@ final class TableTalkUITests: XCTestCase {
         XCTAssertFalse(app.buttons["conversation.stop"].isEnabled,
                        "Microphone-off samples must not imitate live recording.")
         XCTAssertFalse(app.buttons["conversation.stop"].label.isEmpty)
-        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "WhippleChat operator controls and text-only Spanish viewer"
         screenshot.lifetime = .keepAlways
         add(screenshot)
@@ -122,7 +123,7 @@ final class TableTalkUITests: XCTestCase {
 
     @MainActor
     private func attachScreenshot(_ name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
@@ -224,7 +225,7 @@ final class TableTalkUITests: XCTestCase {
     }
 
     @MainActor
-    func testLandscapeLargeTextKeepsControlsAndBothCaptionScrollViewsAccessible() {
+    func testLandscapeLargeTextKeepsControlsAndBothCaptionScrollViewsAccessible() throws {
         openSample(arguments: slowLongArguments + [
             "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"])
         XCUIDevice.shared.orientation = .landscapeLeft
@@ -266,15 +267,21 @@ final class TableTalkUITests: XCTestCase {
         spanish.swipeUp()
         XCTAssertNotEqual(spanish.screenshot().pngRepresentation, spanishBeforeScroll,
                           "The upright Spanish viewer must scroll long content.")
+        waitForScrollToSettle()
         let manualSourceY = source.frame.minY
         let manualTranslationY = translation.frame.minY
-        let translationAfterManualScroll = translation.screenshot().pngRepresentation
+        let translationAfterManualScroll = try captionInteriorPixels(translation, inside: spanish)
+        attachPNG(translationAfterManualScroll, name: "Landscape caption interior - settled baseline")
+        attachScreenshot("Landscape largest text - settled manual scroll baseline")
         waitBeyondSlowReveal()
         XCTAssertEqual(source.label, longEnglish)
         XCTAssertEqual(translation.label, longSpanish)
         XCTAssertEqual(source.frame.minY, manualSourceY, accuracy: 2)
         XCTAssertEqual(translation.frame.minY, manualTranslationY, accuracy: 2)
-        XCTAssertEqual(translation.screenshot().pngRepresentation, translationAfterManualScroll,
+        let translationAfterDeadline = try captionInteriorPixels(translation, inside: spanish)
+        attachPNG(translationAfterDeadline, name: "Landscape caption interior - after reveal deadline")
+        attachScreenshot("Landscape largest text - after reveal deadline")
+        XCTAssertEqual(translationAfterDeadline, translationAfterManualScroll,
                        "Manual scrolling must expose the complete caption and stop subsequent reveal updates.")
         assertOperatorOwnsConversationControls()
         XCTAssertTrue(app.buttons["speak.english"].isHittable)
@@ -518,5 +525,51 @@ final class TableTalkUITests: XCTestCase {
         let backgrounded = app.wait(for: .runningBackground, timeout: 10)
             || app.wait(for: .runningBackgroundSuspended, timeout: 5)
         XCTAssertTrue(backgrounded, "The app must be backgrounded or suspended before it is reactivated.")
+    }
+
+    @MainActor
+    private func waitForScrollToSettle() {
+        let deadline = Date().addingTimeInterval(2)
+        let settled = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in Date() >= deadline }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [settled], timeout: 3), .completed)
+    }
+
+    /// Application/element captures can retain portrait cropping after rotation.
+    /// Normalize a full-screen capture into current screen coordinates, then
+    /// compare only visible caption ink, excluding system UI and the scroll bar.
+    @MainActor
+    private func captionInteriorPixels(_ caption: XCUIElement, inside scroll: XCUIElement) throws -> Data {
+        let screenImage = XCUIScreen.main.screenshot().image
+        let rawImage = try XCTUnwrap(screenImage.cgImage)
+        let screenFrame = app.frame
+        var visible = caption.frame.intersection(scroll.frame).intersection(screenFrame)
+            .insetBy(dx: 4, dy: 4)
+        visible.size.width -= 16 // Right-side scroll indicator and its fading edge.
+        XCTAssertGreaterThan(visible.width, 0, "A caption interior must be visible for pixel validation.")
+        XCTAssertGreaterThan(visible.height, 0, "A caption interior must be visible for pixel validation.")
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = CGFloat(max(rawImage.width, rawImage.height))
+            / max(screenFrame.width, screenFrame.height)
+        format.opaque = true
+        let normalized = UIGraphicsImageRenderer(size: screenFrame.size, format: format).image { _ in
+            screenImage.draw(in: CGRect(origin: .zero, size: screenFrame.size))
+        }
+        let pixels = CGRect(x: (visible.minX - screenFrame.minX) * format.scale,
+                            y: (visible.minY - screenFrame.minY) * format.scale,
+                            width: visible.width * format.scale,
+                            height: visible.height * format.scale).integral
+        let normalizedPixels = try XCTUnwrap(normalized.cgImage)
+        let captionPixels = try XCTUnwrap(normalizedPixels.cropping(to: pixels))
+        return try XCTUnwrap(UIImage(cgImage: captionPixels).pngData())
+    }
+
+    @MainActor
+    private func attachPNG(_ pixels: Data, name: String) {
+        let attachment = XCTAttachment(data: pixels, uniformTypeIdentifier: "public.png")
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

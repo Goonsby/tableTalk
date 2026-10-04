@@ -485,6 +485,7 @@ final class ConversationModel: ObservableObject {
 
     /// Removing the presentation mask exposes the complete ledger text immediately.
     func finishReveal() {
+        guard revealTask != nil || captionReveal != nil || revealingTurnID != nil else { return }
         revealTask?.cancel()
         revealTask = nil
         captionReveal = nil
