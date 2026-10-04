@@ -13,3 +13,9 @@ gradle/wrapper/gradle-wrapper.jar
 /.tooling/
 __pycache__/
 /artifacts/
+/ios/.build/
+/ios/.swiftpm/
+/ios/*.xcodeproj/
+**/xcuserdata/
+*.xcuserstate
+.DS_Store

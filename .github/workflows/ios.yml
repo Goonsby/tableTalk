@@ -1,0 +1,143 @@
+name: iPhone checks
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+  pull_request:
+    paths:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      SOURCE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show Apple toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+      - name: Install project generator
+        run: |
+          brew install xcodegen
+          xcodegen --version
+      - name: Test conversation core
+        run: swift test --package-path ios
+      - name: Generate Xcode project
+        run: xcodegen generate --spec ios/project.yml
+      - name: Build unsigned iPhone application
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          xcodebuild -project ios/TableTalk.xcodeproj -scheme TableTalk \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/build/device CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee artifacts/ios-device-build.log
+      - name: Select an available iPhone simulator
+        id: simulator
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          devices = json.loads(subprocess.check_output(
+              ["xcrun", "simctl", "list", "devices", "available", "--json"]))["devices"]
+          candidates = [
+              (runtime, device)
+              for runtime, values in devices.items()
+              if "iOS-18-" in runtime
+              for device in values
+              if device["name"].startswith("iPhone") and device.get("isAvailable", False)
+          ]
+          if not candidates:
+              raise SystemExit("No available iOS 18 iPhone simulator in the selected Xcode. See runner image tools.")
+          runtime, device = sorted(candidates, key=lambda item: (item[0], item[1]["name"]))[-1]
+          print(f"Using {device['name']} / {runtime} / {device['udid']}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"udid={device['udid']}\n")
+          PY
+      - name: Test native sample conversation UI
+        env:
+          SIMULATOR_UDID: ${{ steps.simulator.outputs.udid }}
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/TableTalk.xcodeproj -scheme TableTalk \
+            -configuration Debug -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath ios/build/simulator \
+            -resultBundlePath artifacts/TableTalk-UI.xcresult \
+            -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO \
+            test 2>&1 | tee artifacts/ios-simulator-test.log
+      - name: Export UI screenshots
+        if: always()
+        run: |
+          if [ -d artifacts/TableTalk-UI.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path artifacts/TableTalk-UI.xcresult \
+              --output-path artifacts/screenshots
+          fi
+      - name: Package simulator app
+        if: success()
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            ios/build/simulator/Build/Products/Debug-iphonesimulator/TableTalk.app \
+            artifacts/TableTalk-iPhone-Simulator.zip
+      - name: Package unsigned device build and native source
+        if: success()
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            ios/build/device/Build/Products/Release-iphoneos/TableTalk.app \
+            artifacts/TableTalk-iPhone-Unsigned.zip
+          git archive --format=zip --output=artifacts/TableTalk-iPhone-Source.zip \
+            HEAD ios docs/iphone.md
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, plistlib
+          root = pathlib.Path("artifacts")
+          app = pathlib.Path("ios/build/device/Build/Products/Release-iphoneos/TableTalk.app")
+          with (app / "Info.plist").open("rb") as file:
+              info = plistlib.load(file)
+          receipt = {
+              "commit": os.environ["GITHUB_SHA"],
+              "head_commit": os.environ["SOURCE_HEAD_SHA"],
+              "run_url": f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              "version": info["CFBundleShortVersionString"],
+              "build": info["CFBundleVersion"],
+              "bundle_id": info["CFBundleIdentifier"],
+              "device_build_signed": False,
+              "physical_device_tested": False,
+              "device_install_requires_owner_signing": True,
+              "files": {
+                  file.name: {"bytes": file.stat().st_size, "sha256": hashlib.sha256(file.read_bytes()).hexdigest()}
+                  for file in sorted(root.glob("*.zip"))
+              },
+          }
+          (root / "build-info.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          (root / "INSTALL.txt").write_text(
+              "TableTalk iPhone 0.2.1 (build 2)\n\n"
+              "TableTalk-iPhone-Source.zip: native source for installation through Xcode.\n"
+              "TableTalk-iPhone-Unsigned.zip: compiled ARM64 device app; cannot install without signing.\n"
+              "TableTalk-iPhone-Simulator.zip: simulator app; cannot install on a physical iPhone.\n\n"
+              "To install: extract Source.zip on a Mac, run `xcodegen generate --spec ios/project.yml`,\n"
+              "open ios/TableTalk.xcodeproj, select your Personal Team in Signing & Capabilities,\n"
+              "connect your iPhone (Developer Mode enabled), select it, and choose Product > Run.\n"
+              "See docs/iphone.md. No signed IPA or TestFlight upload is included.\n"
+          )
+          PY
+      - name: Upload iPhone validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabletalk-iphone-checks
+          path: artifacts/
+          retention-days: 14

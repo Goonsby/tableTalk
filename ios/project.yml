@@ -1,0 +1,70 @@
+name: TableTalk
+options:
+  minimumXcodeGenVersion: 2.42.0
+  xcodeVersion: '16.4'
+  deploymentTarget:
+    iOS: '18.0'
+  developmentLanguage: en
+  createIntermediateGroups: true
+packages:
+  TableTalkCore:
+    path: .
+settings:
+  base:
+    SWIFT_VERSION: '5.0'
+    SWIFT_STRICT_CONCURRENCY: complete
+    TARGETED_DEVICE_FAMILY: '1'
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: NO
+    MARKETING_VERSION: 0.2.1
+    CURRENT_PROJECT_VERSION: '2'
+targets:
+  TableTalk:
+    type: application
+    platform: iOS
+    sources:
+      - path: TableTalk
+        excludes:
+          - Info.plist
+          - PrivacyInfo.xcprivacy
+      - path: TableTalk/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.tabletalk.ios
+        INFOPLIST_FILE: TableTalk/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - package: TableTalkCore
+        product: TableTalkCore
+      - sdk: Speech.framework
+      - sdk: Translation.framework
+      - sdk: AVFoundation.framework
+  TableTalkUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - TableTalkUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: org.tabletalk.ios.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: TableTalk
+    dependencies:
+      - target: TableTalk
+schemes:
+  TableTalk:
+    build:
+      targets:
+        TableTalk: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: TableTalkUITests
+          parallelizable: false
+    archive:
+      config: Release

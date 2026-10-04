@@ -1,5 +1,13 @@
 # TableTalk
 
+TableTalk lets two people share one phone across a table for English/Spanish conversation. This repository contains Android editions and a native iPhone app; each platform has its own installation and offline setup steps.
+
+## iPhone edition
+
+The native SwiftUI app in [`ios/`](ios/) requires **iOS 18 or later**. It uses Apple's on-device Speech and Translation frameworks, with opposing English/Spanish panels, short speaking turns, memory-only history, and a labelled sample mode. Speech requests require on-device recognition; unavailable local assets cause a visible failure.
+
+See the [iPhone build, installation, offline setup, and testing guide](docs/iphone.md). Build with Xcode on a Mac and install using your Apple Account's Personal Team for device testing. There is no signed iPhone download or App Store release yet. Simulator and automated checks do not establish that speech and translation work on an actual iPhone; test both directions in airplane mode with Wi-Fi off before use.
+
 ## Pocophone F1 edition (0.2.0 test build)
 
 [**Download the POCO F1 APK**](https://github.com/Goonsby/tableTalk/releases/download/v0.2.0-poco/tabletalk-poco.apk), install it, and tap **Download speech + translation models**. One app downloads the models and then transcribes/translates on the phone, including offline. Wi-Fi is the default; mobile data is optional. Checksums and build metadata accompany the APK in the [0.2.0 POCO prerelease](https://github.com/Goonsby/tableTalk/releases/tag/v0.2.0-poco).
