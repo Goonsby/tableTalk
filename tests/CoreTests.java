@@ -1,6 +1,7 @@
 import org.tabletalk.core.AudioSamples;
 import org.tabletalk.core.ConversationLedger;
 import org.tabletalk.core.Language;
+import org.tabletalk.core.TranslationReveal;
 
 public final class CoreTests {
     private static int checked;
@@ -9,6 +10,8 @@ public final class CoreTests {
         checked++;
     }
     public static void main(String[] args) throws Exception {
+        checkTranslationReveal();
+        checkCorrections();
         ConversationLedger ledger = new ConversationLedger();
         long epoch = ledger.epoch();
         long id = ledger.addSource(epoch, Language.SPANISH, "Estoy preocupado por mi familia.");
@@ -114,5 +117,85 @@ public final class CoreTests {
         check(progress[0] == large.length && java.util.Arrays.equals(large, output.toByteArray()),
                 "multi-buffer copy preserves every byte");
         System.out.println("Passed " + checked + " core behavior checks.");
+    }
+
+    private static void checkCorrections() {
+        ConversationLedger ledger = new ConversationLedger();
+        long oldEpoch = ledger.epoch();
+        long id = ledger.addSource(oldEpoch, Language.SPANISH, "Me duele el brazo.");
+        ledger.finish(oldEpoch, id, "My arm hurts.", false);
+        long correctedEpoch = ledger.reviseLastSource(oldEpoch, id, "  Me duele la mano.  ");
+        check(correctedEpoch > oldEpoch, "correction advances the work generation");
+        ConversationLedger.Turn corrected = ledger.snapshot().get(0);
+        check(corrected.id == id && corrected.sourceLanguage == Language.SPANISH
+                && ledger.snapshot().size() == 1, "correction replaces the same last turn without adding history");
+        check(corrected.source.equals("Me duele la mano.") && corrected.translation == null
+                && !corrected.translationFailed, "correction clears the old translation and keeps trimmed original");
+        check(!ledger.finish(oldEpoch, id, "stale arm translation", false)
+                && ledger.addSource(oldEpoch, Language.ENGLISH, "stale capture") == -1,
+                "correction rejects stale translation and recognition");
+        check(ledger.finish(correctedEpoch, id, "My hand hurts.", false), "new correction generation can translate");
+        check(ledger.reviseLastSource(correctedEpoch, id, "   ") == -1
+                && ledger.epoch() == correctedEpoch && ledger.snapshot().get(0).translation.equals("My hand hurts."),
+                "blank correction leaves source translation and generation unchanged");
+        check(ledger.reviseLastSource(oldEpoch, id, "stale editor") == -1, "stale editor generation is rejected");
+        long newer = ledger.addSource(correctedEpoch, Language.ENGLISH, "Please tell me more.");
+        check(ledger.reviseLastSource(correctedEpoch, id, "wrong turn") == -1,
+                "an editor cannot overwrite an older turn after another capture");
+        ledger.finish(correctedEpoch, newer, null, true);
+        long retryEpoch = ledger.reviseLastSource(correctedEpoch, newer, "Please tell me a little more.");
+        check(!ledger.snapshot().get(1).translationFailed && ledger.snapshot().get(1).translation == null,
+                "editing a failed translation resets its result");
+        ledger.finish(retryEpoch, newer, null, true);
+        check(ledger.snapshot().get(1).source.equals("Please tell me a little more.")
+                && ledger.snapshot().get(1).translationFailed, "failed retranslation preserves corrected original");
+        long cancelled = ledger.invalidate();
+        check(ledger.snapshot().size() == 2 && !ledger.finish(retryEpoch, newer, "late result", false),
+                "operator cancellation preserves history while rejecting pending results");
+        ledger.clear();
+        check(ledger.reviseLastSource(cancelled, newer, "cleared editor") == -1 && ledger.snapshot().isEmpty(),
+                "clear prevents a correction from restoring conversation content");
+    }
+
+    private static void checkTranslationReveal() {
+        check(java.util.Arrays.equals(TranslationReveal.wordEnds("Hello, world!"), new int[] {7, 13}),
+                "English words include punctuation and trailing spaces");
+        check(java.util.Arrays.equals(TranslationReveal.wordEnds("\u00bfC\u00f3mo est\u00e1s? Muy bien."),
+                        new int[] {6, 13, 17, 22}), "Spanish punctuation and accents stay with each word");
+        check(java.util.Arrays.equals(TranslationReveal.wordEnds("  Don't re-enter.\r\nNext\tline\u00a0end  "),
+                        new int[] {8, 19, 24, 29, 34}),
+                "leading space, contractions, hyphens, line breaks and nonbreaking spaces are preserved");
+        String emoji = "\ud83d\udc69\ud83c\udffd\u200d\ud83d\udcbb";
+        String flag = "\ud83c\uddea\ud83c\uddf8";
+        String unicode = "Cafe\u0301 " + emoji + " " + flag + "!";
+        check(java.util.Arrays.equals(TranslationReveal.wordEnds(unicode),
+                        new int[] {6, 6 + emoji.length() + 1, unicode.length()}),
+                "combining accents, skin tones, joined emoji and flags remain whole");
+        check(java.util.Arrays.equals(TranslationReveal.wordEnds("A \u0301B C"), new int[] {5, 6}),
+                "a combining mark attached to a space is not split");
+        check(TranslationReveal.wordEnds("").length == 0 && TranslationReveal.wordEnds(null).length == 0,
+                "empty text has no reveal steps");
+        for (String text : new String[] {" ", "\n\t", "word", unicode, "a\n\nb\r\nc ",
+                "x".repeat(20_000), "a ".repeat(20_000)}) {
+            int previous = 0;
+            int[] ends = TranslationReveal.wordEnds(text);
+            for (int end : ends) {
+                if (end <= previous || end > text.length()) throw new AssertionError("invalid reveal offset");
+                if (end < text.length() && Character.isLowSurrogate(text.charAt(end))) {
+                    throw new AssertionError("reveal splits a surrogate pair");
+                }
+                previous = end;
+            }
+            check(previous == text.length(), "nonempty text reveals every character monotonically");
+        }
+        check(TranslationReveal.wordEnds("x".repeat(20_000)).length == 1,
+                "long unbroken tokens stay intact");
+        check(TranslationReveal.durationMillis(0) == 0 && TranslationReveal.durationMillis(-1) == 0,
+                "no words need no animation");
+        check(TranslationReveal.durationMillis(1) == 600 && TranslationReveal.durationMillis(10) == 1100,
+                "short reveals have a gentle minimum and word cadence");
+        check(TranslationReveal.durationMillis(1000) == 12_000
+                        && TranslationReveal.durationMillis(Integer.MAX_VALUE) == 12_000,
+                "long reveals are capped without integer overflow");
     }
 }

@@ -24,10 +24,10 @@ android {
         }
         create("poco") {
             dimension = "network"
-            applicationIdSuffix = ".poco"
+            applicationIdSuffix = providers.gradleProperty("whipplePreviewSuffix").getOrElse(".poco")
             minSdk = 26
-            versionCode = 10
-            versionName = "0.2.0-poco"
+            versionCode = 12
+            versionName = "0.2.2-whipple-preview"
             signingConfig = signingConfigs.getByName("debug")
             buildConfigField("boolean", "ALLOW_MODEL_DOWNLOAD", "true")
             externalNativeBuild {
@@ -43,6 +43,7 @@ android {
     // Setup/offline share an application ID for in-place provisioning updates.
     // POCO has its own ID and keeps network access for future model setup.
     buildFeatures { buildConfig = true }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     signingConfigs.getByName("debug") {
         // Cloud builds keep their development key inside the writable workspace.
         System.getenv("TABLETALK_DEBUG_KEYSTORE")?.let { storeFile = file(it) }
@@ -64,4 +65,6 @@ android {
 
 dependencies {
     implementation("com.google.mlkit:translate:17.0.3")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
 }

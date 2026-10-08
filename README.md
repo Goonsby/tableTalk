@@ -1,10 +1,22 @@
-# TableTalk
+# Whipple Chat
+
+Whipple Chat lets one English-speaking operator run a bilingual conversation while the Spanish-speaking viewer remains behind a counter or glass. The operator selects **Speak English** or **Listen to Spanish**, then **Stop**; the Spanish side has readable instructions and captions with no buttons. The operator can retry a turn, correct the latest transcript and translate it again, clear the conversation, or return to setup. Portrait puts the Spanish viewer above the controls; landscape puts it beside them. The viewer starts upright and can be flipped by the operator.
+
+The `codex/whipple-chat` preview combines the latest Android caption reveal and native iPhone work: Android **0.2.2-whipple-preview / code 12**, iPhone **0.2.2 / build 3**. Repository, package and bundle identifiers retain `TableTalk` for continuity. See the [operator and glass-counter guide](docs/whipple-chat.md) and [iPhone installation guide](docs/iphone.md). Original draft PRs and published Android downloads below remain historical builds.
+
+Speech and translation run locally after language setup. Captions appear after a speaking turn; translations reveal gently without reflowing their lines. Corrections and history stay in memory. Clear, setup and backgrounding cancel pending results and clear the conversation. Sample mode uses fixed text and explicitly keeps the microphone off.
+
+Phone audio through plexiglass is **not yet physically tested**. Glass may block or distort the other speaker's voice; the app cannot fix an unsuitable microphone path. Test the actual position and any permitted intercom or microphone arrangement before relying on it. The public [browser sample](https://tabletalk.igorio.space/) is a separate earlier demo and has not been redeployed by this preview.
+
+## Earlier Android builds
 
 ## Pocophone F1 edition (0.2.0 test build)
 
 [**Download the POCO F1 APK**](https://github.com/Goonsby/tableTalk/releases/download/v0.2.0-poco/tabletalk-poco.apk), install it, and tap **Download speech + translation models**. One app downloads the models and then transcribes/translates on the phone, including offline. Wi-Fi is the default; mobile data is optional. Checksums and build metadata accompany the APK in the [0.2.0 POCO prerelease](https://github.com/Goonsby/tableTalk/releases/tag/v0.2.0-poco).
 
-This ARM64 build is tuned for the Snapdragon 845, uses multilingual Whisper tiny, and installs alongside the older test app. See the [POCO setup and verification guide](docs/pocophone-f1.md). Device performance and MIUI behavior still need a physical F1 test.
+This ARM64 build is tuned for the Snapdragon 845, uses multilingual Whisper tiny, and installs alongside the older test app. See the [POCO setup and verification guide](docs/pocophone-f1.md). The user reports that the latest Android build works well. Device performance measurements and specific MIUI/offline conditions remain separate checks.
+
+The `codex/android-caption-reveal` branch contains a [translation-reveal preview](docs/android-caption-reveal.md), version `0.2.1-poco-preview` / code 11. It adds gradual captions and improved long-text scrolling. The public download above remains the original 0.2.0 build; no new release is published by this preview.
 
 ## Original LG prototype (0.1.0)
 

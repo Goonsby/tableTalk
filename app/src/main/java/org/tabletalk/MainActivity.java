@@ -2,9 +2,11 @@ package org.tabletalk;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.net.Uri;
 import android.net.ConnectivityManager;
@@ -14,8 +16,10 @@ import android.widget.CheckBox;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -26,6 +30,9 @@ import org.tabletalk.core.Language;
 import org.tabletalk.inference.TranslationEngine;
 import org.tabletalk.inference.WhisperEngine;
 import org.tabletalk.models.ModelStore;
+import org.tabletalk.ui.CaptionScrollView;
+import org.tabletalk.ui.RevealingTextView;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
@@ -62,10 +69,19 @@ public final class MainActivity extends Activity {
     private boolean demo;
     private int demoStep;
     private Language speaking;
+    private Language lastRequestedLanguage;
+    private boolean spanishFlipped;
+    private AlertDialog correctionDialog;
+    private Runnable pendingSampleStep;
+    private Button speakEnglishButton;
+    private Button listenSpanishButton;
+    private Button stopButton;
+    private Button retryButton;
+    private Button editButton;
     private Phase phase = Phase.READY;
     private String englishStatus = "Prepare the offline models";
     private String spanishStatus = "Prepare los modelos sin conexión";
-    private enum Phase { READY, RECORDING, PROCESSING }
+    private enum Phase { READY, RECORDING, TRANSCRIBING, TRANSLATING }
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -92,8 +108,9 @@ public final class MainActivity extends Activity {
         if (setupBusy) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (centerStatus != null) {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            setStatus(demo ? "Sample layout · microphone off" : "Tap your side to speak",
-                    demo ? "Ejemplo · micrófono apagado" : "Toque su lado para hablar");
+            setStatus(demo ? "Sample layout — microphone off. Choose a language to practise."
+                            : "Ready. Choose Speak English or Listen to Spanish.",
+                    "ESPERE. El operador dará la señal para hablar.");
         }
     }
     @Override public void onPause() {
@@ -125,8 +142,8 @@ public final class MainActivity extends Activity {
         content.setPadding(dp(24), dp(24), dp(24), dp(24));
         scroll.addView(content);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, -1));
-        content.addView(text("TableTalk", 18, GREEN));
-        content.addView(text("A conversation,\nacross languages.", 32, INK));
+        content.addView(text("Whipple Chat", 18, GREEN));
+        content.addView(text("One operator.\nA shared conversation.", 32, INK));
         content.addView(text("English ↔ Español\nSet up once before the visit. Translate on the phone.", 18, MUTED));
         space(content, 20);
         setupStatus = text(ready ? "Models ready. Test both speaking directions in airplane mode."
@@ -296,88 +313,188 @@ public final class MainActivity extends Activity {
     private void showConversation(boolean sample) {
         cancelAndClear();
         demo = sample;
+        spanishFlipped = false;
         root.removeAllViews();
         spanishPanel = new Panel(Language.SPANISH);
-        // Rotates the WHOLE panel, including buttons and scroll gestures.
-        spanishPanel.container.setRotation(180);
-        root.addView(spanishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
-        LinearLayout divider = column();
-        divider.setPadding(dp(12), dp(5), dp(12), dp(5));
-        divider.setBackgroundColor(Color.rgb(229, 236, 228));
-        centerStatus = text("", 12, INK);
-        centerStatus.setGravity(Gravity.CENTER);
-        divider.addView(centerStatus);
-        LinearLayout actions = new LinearLayout(this);
-        actions.setGravity(Gravity.CENTER);
-        Button clear = button("Clear / Borrar", () -> {
-            cancelAndClear();
-            setStatus(demo ? "Sample layout · microphone off" : "Conversation cleared",
-                    demo ? "Ejemplo · micrófono apagado" : "Conversación borrada");
-        });
-        Button setup = button("Setup", this::showSetup);
-        actions.addView(clear, new LinearLayout.LayoutParams(0, dp(48), 1));
-        actions.addView(setup, new LinearLayout.LayoutParams(0, dp(48), 1));
-        divider.addView(actions);
-        root.addView(divider);
         englishPanel = new Panel(Language.ENGLISH);
-        root.addView(englishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
+        centerStatus = text("", 12, GREEN);
+        compactOperatorText(centerStatus, 12);
+        centerStatus.setTag("operatorPhase");
+        englishPanel.container.addView(centerStatus, 2);
+        if (getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            LinearLayout panels = new LinearLayout(this);
+            panels.addView(spanishPanel.container, new LinearLayout.LayoutParams(0, -1, 1));
+            panels.addView(englishPanel.container, new LinearLayout.LayoutParams(0, -1, 1));
+            root.addView(panels, new LinearLayout.LayoutParams(-1, 0, 1));
+        } else {
+            root.addView(spanishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
+            root.addView(englishPanel.container, new LinearLayout.LayoutParams(-1, 0, 1));
+        }
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if (demo) addDemo(Language.ENGLISH);
-        setStatus(demo ? "Sample layout · microphone off" : "Tap your side to speak",
-                demo ? "Ejemplo · micrófono apagado" : "Toque su lado para hablar");
+        setStatus(demo ? "Sample layout — microphone off. Choose a language to practise."
+                        : "Ready. Choose Speak English or Listen to Spanish.",
+                "ESPERE. El operador dará la señal para hablar.");
         render();
     }
+    private Button operatorButton(String label, String tag, Runnable action) {
+        Button control = button(label, action);
+        control.setTag(tag);
+        compactOperatorText(control, 14);
+        control.setMinHeight(dp(48));
+        control.setMinimumHeight(dp(48));
+        control.setPadding(dp(4), dp(4), dp(4), dp(4));
+        return control;
+    }
+    private void operatorRow(LinearLayout target, Button... controls) {
+        LinearLayout row = new LinearLayout(this);
+        for (Button control : controls) row.addView(control, new LinearLayout.LayoutParams(0, dp(48), 1));
+        target.addView(row, new LinearLayout.LayoutParams(-1, -2));
+    }
+    private void compactOperatorText(TextView view, int size) {
+        // Keep Stop reachable on short landscape screens while caption text follows the full accessibility font scale.
+        view.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
+                dp(size) * Math.min(1.3f, getResources().getConfiguration().fontScale));
+    }
+    private void addOperatorControls(LinearLayout target) {
+        speakEnglishButton = operatorButton("Speak English", "operatorSpeakEnglish", () -> speak(Language.ENGLISH));
+        listenSpanishButton = operatorButton("Listen Spanish", "operatorListenSpanish", () -> speak(Language.SPANISH));
+        listenSpanishButton.setContentDescription("Listen to Spanish");
+        stopButton = operatorButton("Stop", "operatorStop", this::stopCurrentTurn);
+        stopButton.setContentDescription("Stop current turn");
+        retryButton = operatorButton("Retry", "operatorRetry", this::retryLastCapture);
+        editButton = operatorButton("Edit", "operatorEdit", this::editLastTranscript);
+        editButton.setContentDescription("Edit last transcript and translate again");
+        operatorRow(target, speakEnglishButton, listenSpanishButton);
+        operatorRow(target, stopButton, retryButton, editButton);
+        Button flip = operatorButton("Flip", "operatorFlip", () -> {
+            spanishFlipped = !spanishFlipped;
+            spanishPanel.container.setRotation(spanishFlipped ? 180 : 0);
+        });
+        flip.setContentDescription("Flip Spanish view for counter or tabletop reading");
+        operatorRow(target, operatorButton("Clear", "operatorClear", () -> {
+            cancelAndClear();
+            setStatus(demo ? "Sample layout — microphone off. Conversation cleared." : "Conversation cleared. Choose a language.",
+                    "ESPERE. El operador dará la señal para hablar.");
+        }), flip, operatorButton("Setup", "operatorSetup", this::showSetup));
+        retryButton.setContentDescription("Record a new capture in the last requested language");
+    }
     private void speak(Language language) {
-        if (!foreground) return;
-        if (demo) { addDemo(language); return; }
-        if (phase == Phase.RECORDING && speaking == language) {
-            phase = Phase.PROCESSING;
-            PcmRecorder current = recorder.get();
-            if (current != null) current.stop();
-            setStatus("Processing…", "Procesando…");
+        if (!foreground || phase != Phase.READY || setupBusy || (!demo && !ready)) return;
+        // Retain the requested direction even if permission, capture, or recognition fails before a source exists.
+        lastRequestedLanguage = language;
+        if (demo) {
+            cancelCurrentWork();
+            prepareNextTurn();
+            speaking = language;
+            phase = Phase.RECORDING;
+            setStatus("Sample listening — microphone off. Press Stop current turn.",
+                    language == Language.SPANISH ? "HABLE AHORA. Una frase breve, por favor."
+                            : "ESPERE. Escuche y lea la traducción cuando esté lista.");
             return;
         }
-        if (!ready || phase != Phase.READY || setupBusy) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, MICROPHONE_PERMISSION);
             return;
         }
         startCapture(language);
     }
+    private void stopCurrentTurn() {
+        if (phase == Phase.READY) return;
+        if (phase == Phase.RECORDING) {
+            phase = Phase.TRANSCRIBING;
+            setStatus(demo ? "Sample transcribing — microphone off." : "Transcribing on this phone.",
+                    "ESPERE. Transcribiendo; no hable todavía.");
+            if (demo) {
+                final long epoch = ledger.epoch();
+                final Language language = speaking;
+                postSampleStep(epoch, 1200, () -> {
+                    final String[] sample = sampleTurn(language);
+                    final long turnId = ledger.addSource(epoch, language, sample[0]);
+                    if (turnId == -1) return;
+                    phase = Phase.TRANSLATING;
+                    setStatus("Sample translating — microphone off.", "ESPERE. Traduciendo; no hable todavía.");
+                    render();
+                    postSampleStep(epoch, 800, () -> {
+                        ledger.finish(epoch, turnId, sample[1], false);
+                        finishStatus(epoch, "Sample complete — microphone off. Choose the next language.",
+                                "ESPERE. El operador dará la señal para hablar.", false);
+                    });
+                });
+            } else {
+                PcmRecorder current = recorder.get();
+                if (current != null) current.stop();
+            }
+            return;
+        }
+        cancelCurrentWork();
+        List<ConversationLedger.Turn> history = ledger.snapshot();
+        if (!history.isEmpty()) {
+            ConversationLedger.Turn last = history.get(history.size() - 1);
+            if (last.translation == null) ledger.finish(ledger.epoch(), last.id, null, true);
+        }
+        setStatus("Turn cancelled. Retry the capture or edit its transcript.", "ESPERE. El operador dará la señal para hablar.");
+        render();
+    }
+    private void postSampleStep(long epoch, long delay, Runnable action) {
+        if (pendingSampleStep != null) root.removeCallbacks(pendingSampleStep);
+        pendingSampleStep = () -> {
+            pendingSampleStep = null;
+            if (foreground && demo && ledger.isCurrent(epoch)) action.run();
+        };
+        root.postDelayed(pendingSampleStep, delay);
+    }
+    private void retryLastCapture() {
+        Language language = lastRequestedLanguage;
+        if (language == null || !foreground) return;
+        cancelCurrentWork();
+        speak(language);
+    }
     @Override public void onRequestPermissionsResult(int request, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(request, permissions, results);
         if (request != MICROPHONE_PERMISSION) return;
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-            // Tap again: the permission dialog may have paused the activity.
-            setStatus("Microphone allowed. Tap your side to speak.", "Micrófono permitido. Toque su lado para hablar.");
+            // The permission dialog may have paused and cleared the activity. Ask for a deliberate operator action.
+            setStatus("Microphone allowed. Choose Speak English or Listen to Spanish.",
+                    "ESPERE. El operador dará la señal para hablar.");
         } else {
-            setStatus("Allow microphone access in Android settings.", "Permita el micrófono en ajustes de Android.");
+            setStatus("Allow microphone access in Android settings, then choose a language.",
+                    "ESPERE. El operador está preparando el micrófono.");
+            showAttentionStatus();
         }
     }
     private void startCapture(Language language) {
+        cancelCurrentWork();
+        prepareNextTurn();
         final long epoch = ledger.epoch();
         final PcmRecorder capture = new PcmRecorder();
         recorder.set(capture);
         speaking = language;
         phase = Phase.RECORDING;
-        setStatus("Listening · tap again to finish", "Escuchando · toque otra vez para terminar");
+        setStatus(language == Language.ENGLISH ? "Listening to English. Press Stop current turn when finished."
+                        : "Listening to Spanish. Press Stop current turn when finished.",
+                language == Language.SPANISH ? "HABLE AHORA. Una frase breve, por favor."
+                        : "ESPERE. Escuche y lea la traducción cuando esté lista.");
         captureWorker.execute(() -> {
             try (AudioSamples samples = capture.capture(seconds -> onUi(() -> {
                 if (ledger.isCurrent(epoch) && phase == Phase.RECORDING) {
-                    setStatus("Listening · " + (AudioSamples.MAX_SECONDS - seconds) + "s left",
-                            "Escuchando · quedan " + (AudioSamples.MAX_SECONDS - seconds) + "s");
+                    setStatus("Listening to " + (language == Language.ENGLISH ? "English" : "Spanish") + " — "
+                                    + (AudioSamples.MAX_SECONDS - seconds) + "s left. Press Stop when finished.",
+                            language == Language.SPANISH ? "HABLE AHORA. Quedan " + (AudioSamples.MAX_SECONDS - seconds) + "s."
+                                    : "ESPERE. El operador está hablando.");
                 }
             }))) {
                 if (!ledger.isCurrent(epoch)) return;
                 if (!samples.worthDecoding()) {
-                    finishStatus(epoch, "No clear speech. Please try again.", "No se oyó claramente. Intente de nuevo.");
+                    finishStatus(epoch, "No clear speech. Retry last capture or choose a language.",
+                            "ESPERE. No se oyó claramente; espere la señal del operador.");
                     return;
                 }
                 float[] pcm = samples.copy();
                 onUi(() -> {
                     if (ledger.isCurrent(epoch)) {
-                        phase = Phase.PROCESSING;
-                        setStatus("Transcribing on this phone…", "Transcribiendo en este teléfono…");
+                        phase = Phase.TRANSCRIBING;
+                        setStatus("Transcribing on this phone.", "ESPERE. Transcribiendo; no hable todavía.");
                     }
                 });
                 try {
@@ -387,7 +504,8 @@ public final class MainActivity extends Activity {
                     throw unavailable;
                 }
             } catch (Exception failure) {
-                finishStatus(epoch, "Microphone unavailable. Please try again.", "Micrófono no disponible. Intente de nuevo.");
+                finishStatus(epoch, "Microphone unavailable. Retry last capture or choose a language.",
+                        "ESPERE. El micrófono no está disponible.");
             } finally {
                 recorder.compareAndSet(capture, null);
             }
@@ -401,14 +519,16 @@ public final class MainActivity extends Activity {
             String original = whisper.transcribe(pcm, language, () -> ledger.isCurrent(epoch));
             Arrays.fill(pcm, 0);
             if (original.isEmpty()) {
-                finishStatus(epoch, "Please repeat a short sentence.", "Repita una frase corta, por favor.");
+                finishStatus(epoch, "No transcript. Retry last capture with a short sentence.",
+                        "ESPERE. Repita una frase corta cuando el operador dé la señal.");
                 return;
             }
             turnId = ledger.addSource(epoch, language, original);
             if (turnId == -1) return;
             onUi(() -> {
                 if (ledger.isCurrent(epoch)) {
-                    setStatus("Translating on this phone…", "Traduciendo en este teléfono…");
+                    phase = Phase.TRANSLATING;
+                    setStatus("Translating on this phone.", "ESPERE. Traduciendo; no hable todavía.");
                     render();
                 }
             });
@@ -416,51 +536,166 @@ public final class MainActivity extends Activity {
             if (translated.trim().isEmpty()) throw new IllegalStateException();
             ledger.finish(epoch, turnId, translated, false);
             double elapsed = (System.nanoTime() - started) / 1_000_000_000.0;
-            finishStatus(epoch, String.format(Locale.ROOT, "Ready · processed in %.1fs", elapsed),
-                    String.format(Locale.ROOT, "Listo · procesado en %.1fs", elapsed));
+            finishStatus(epoch, String.format(Locale.ROOT, "Ready — processed in %.1fs. Choose the next language.", elapsed),
+                    "ESPERE. El operador dará la señal para hablar.", false);
         } catch (CancellationException cancelled) {
-            // Clear/background already invalidated this turn; never restore it.
+            // Clear, correction, retry, or background invalidated this turn; never restore it.
         } catch (Exception failure) {
             if (turnId != -1) ledger.finish(epoch, turnId, null, true);
-            finishStatus(epoch, "Could not translate. Please repeat or recheck models.",
-                    "No se pudo traducir. Repita o revise los modelos.");
+            finishStatus(epoch, "Could not translate. Edit the transcript, retry capture, or recheck models.",
+                    "ESPERE. No se pudo traducir; el operador revisará el texto.");
         } finally { Arrays.fill(pcm, 0); }
     }
+    private void editLastTranscript() {
+        List<ConversationLedger.Turn> history = ledger.snapshot();
+        if (history.isEmpty() || !foreground) return;
+        cancelCurrentWork();
+        prepareNextTurn();
+        final ConversationLedger.Turn last = history.get(history.size() - 1);
+        final long expected = ledger.epoch();
+        setStatus("Edit the last " + (last.sourceLanguage == Language.ENGLISH ? "English" : "Spanish")
+                        + " transcript, then translate again.", "ESPERE. El operador está corrigiendo el texto.");
+        EditText input = new EditText(this);
+        input.setTag("correctionTranscript");
+        input.setText(last.source);
+        input.setTextSize(20);
+        input.setMinLines(3);
+        input.setMaxLines(8);
+        input.setSaveEnabled(false);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        correctionDialog = new AlertDialog.Builder(this)
+                .setTitle("Edit last transcript")
+                .setMessage("Correct the original " + (last.sourceLanguage == Language.ENGLISH ? "English" : "Spanish")
+                        + " text. The old translation will be replaced."
+                        + (demo ? " Sample corrections use fixed preview text, not real translation." : ""))
+                .setView(input)
+                .setNegativeButton("Cancel", (dialog, which) -> {
+                    setStatus("Correction cancelled. Choose a language or edit again.", "ESPERE. El operador dará la señal para hablar.");
+                })
+                .setPositiveButton("Translate again", null)
+                .create();
+        correctionDialog.setOnDismissListener(dialog -> correctionDialog = null);
+        correctionDialog.show();
+        correctionDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String corrected = input.getText().toString();
+            if (corrected.trim().isEmpty()) {
+                input.setError("Enter a short transcript before translating.");
+                return;
+            }
+            if (!correctLastTranscript(expected, last.id, corrected)) {
+                input.setError("This turn changed. Close this editor and try again.");
+                return;
+            }
+            correctionDialog.dismiss();
+        });
+    }
+    private boolean correctLastTranscript(long expected, long turnId, String corrected) {
+        long epoch = ledger.reviseLastSource(expected, turnId, corrected);
+        if (epoch == -1) return false;
+        cancelCaptureAndReveal();
+        prepareNextTurn();
+        List<ConversationLedger.Turn> history = ledger.snapshot();
+        ConversationLedger.Turn last = history.get(history.size() - 1);
+        phase = Phase.TRANSLATING;
+        setStatus(demo ? "Sample translating corrected text — microphone off." : "Translating corrected text on this phone.",
+                "ESPERE. Traduciendo el texto corregido.");
+        render();
+        if (demo) {
+            postSampleStep(epoch, 800, () -> {
+                String preview = last.sourceLanguage == Language.ENGLISH
+                        ? "Ejemplo de traducción. Este texto no se ha traducido; el micrófono está apagado."
+                        : "Translation preview only. This edited text has not been translated; microphone is off.";
+                ledger.finish(epoch, last.id, preview, false);
+                finishStatus(epoch, "Sample correction complete - fixed preview only, microphone off.",
+                        "EJEMPLO. Texto de muestra, no una traducción real. Micrófono apagado.", false);
+            });
+        } else {
+            inferenceWorker.execute(() -> {
+                try {
+                    if (!ledger.isCurrent(epoch)) return;
+                    String translated = translator.translate(last.source, last.sourceLanguage);
+                    if (translated.trim().isEmpty()) throw new IllegalStateException();
+                    ledger.finish(epoch, last.id, translated, false);
+                    finishStatus(epoch, "Corrected transcript translated. Choose the next language.",
+                            "ESPERE. El operador dará la señal para hablar.", false);
+                } catch (Exception failure) {
+                    ledger.finish(epoch, last.id, null, true);
+                    finishStatus(epoch, "Could not translate corrected text. Edit again or retry capture.",
+                            "ESPERE. No se pudo traducir; el operador revisará el texto.");
+                }
+            });
+        }
+        return true;
+    }
     private void finishStatus(long epoch, String english, String spanish) {
+        finishStatus(epoch, english, spanish, true);
+    }
+    private void finishStatus(long epoch, String english, String spanish, boolean problem) {
         onUi(() -> {
             if (!ledger.isCurrent(epoch)) return;
             speaking = null;
             phase = Phase.READY;
             setStatus(english, spanish);
+            if (problem) showAttentionStatus();
             render();
         });
     }
-    private void cancelAndClear() {
-        ledger.clear();
-        PcmRecorder current = recorder.get();
+    private void cancelCaptureAndReveal() {
+        if (pendingSampleStep != null) root.removeCallbacks(pendingSampleStep);
+        pendingSampleStep = null;
+        if (spanishPanel != null) spanishPanel.stopReveal();
+        if (englishPanel != null) englishPanel.stopReveal();
+        PcmRecorder current = recorder.getAndSet(null);
         if (current != null) current.stop();
         if (whisper != null) whisper.cancel();
         speaking = null;
         phase = Phase.READY;
-        if (spanishPanel != null) render();
+    }
+    private void cancelCurrentWork() {
+        ledger.invalidate();
+        cancelCaptureAndReveal();
+        List<ConversationLedger.Turn> history = ledger.snapshot();
+        if (!history.isEmpty()) {
+            ConversationLedger.Turn last = history.get(history.size() - 1);
+            if (last.translation == null) ledger.finish(ledger.epoch(), last.id, null, true);
+        }
+    }
+    private void cancelAndClear() {
+        ledger.clear();
+        cancelCaptureAndReveal();
+        lastRequestedLanguage = null;
+        if (correctionDialog != null) correctionDialog.dismiss();
+        if (spanishPanel != null && englishPanel != null) render();
+    }
+    private void prepareNextTurn() {
+        for (Panel panel : new Panel[]{spanishPanel, englishPanel}) {
+            if (panel == null) continue;
+            panel.stopReveal();
+            panel.followLatest = true;
+            panel.scroll.scrollTo(0, 0);
+        }
     }
     private void setStatus(String english, String spanish) {
         englishStatus = english;
         spanishStatus = spanish;
-        if (centerStatus != null) centerStatus.setText((demo ? "SAMPLE / EJEMPLO · " : "")
-                + (BuildConfig.ALLOW_MODEL_DOWNLOAD ? "On-device translation · downloads enabled" : "No internet permission"));
+        if (centerStatus != null) centerStatus.setText(demo ? "SAMPLE — MICROPHONE OFF · " + phase.name()
+                : phase == Phase.RECORDING ? "LISTENING" : phase.name());
         if (englishPanel != null) englishPanel.status.setText(english);
         if (spanishPanel != null) spanishPanel.status.setText(spanish);
         updateButtons();
     }
+    private void showAttentionStatus() {
+        if (centerStatus != null && !demo) centerStatus.setText("WAITING — operator review needed");
+    }
     private void updateButtons() {
-        if (englishPanel == null || spanishPanel == null) return;
-        for (Panel panel : new Panel[]{englishPanel, spanishPanel}) {
-            boolean active = phase == Phase.RECORDING && speaking == panel.language;
-            panel.talk.setEnabled(demo || phase == Phase.READY || active);
-            panel.talk.setText(active ? (panel.language == Language.ENGLISH ? "Finish speaking" : "Terminar")
-                    : (panel.language == Language.ENGLISH ? "Speak English" : "Hablar español"));
-        }
+        if (englishPanel == null || spanishPanel == null || speakEnglishButton == null) return;
+        boolean idle = phase == Phase.READY;
+        speakEnglishButton.setEnabled(idle);
+        listenSpanishButton.setEnabled(idle);
+        stopButton.setEnabled(!idle);
+        retryButton.setEnabled(lastRequestedLanguage != null);
+        editButton.setEnabled(!ledger.snapshot().isEmpty());
     }
     private void render() {
         if (spanishPanel == null || englishPanel == null) return;
@@ -469,7 +704,7 @@ public final class MainActivity extends Activity {
         englishPanel.render(history);
         updateButtons();
     }
-    private void addDemo(Language language) {
+    private String[] sampleTurn(Language language) {
         String original;
         String translated;
         if (language == Language.ENGLISH) {
@@ -479,9 +714,13 @@ public final class MainActivity extends Activity {
             original = "Estoy preocupado por mi familia.";
             translated = "I am worried about my family.";
         }
+        return new String[]{original, translated};
+    }
+    private void addDemo(Language language) {
+        String[] sample = sampleTurn(language);
         long epoch = ledger.epoch();
-        long id = ledger.addSource(epoch, language, original);
-        ledger.finish(epoch, id, translated, false);
+        long id = ledger.addSource(epoch, language, sample[0]);
+        ledger.finish(epoch, id, sample[1], false);
         render();
     }
     private void onUi(Runnable action) {
@@ -521,46 +760,151 @@ public final class MainActivity extends Activity {
         final LinearLayout container = column();
         final TextView status;
         final LinearLayout captions = column();
-        final ScrollView scroll = new ScrollView(MainActivity.this);
-        final Button talk;
+        final CaptionScrollView scroll = new CaptionScrollView(MainActivity.this);
+        final LinearLayout reading = column();
+        final List<RevealingTextView> reveals = new ArrayList<>();
+        List<ConversationLedger.Turn> renderedHistory = new ArrayList<>();
+        boolean followLatest = true;
+        boolean rendered;
+        int renderVersion;
+        Runnable pendingPosition;
+        ViewTreeObserver.OnPreDrawListener pendingLayout;
         Panel(Language language) {
             this.language = language;
-            container.setPadding(dp(18), dp(10), dp(18), dp(10));
-            TextView heading = text(language == Language.SPANISH ? "ESPAÑOL" : "ENGLISH", 15, GREEN);
-            heading.setLetterSpacing(0.12f);
+            boolean viewer = language == Language.SPANISH;
+            container.setTag(viewer ? "viewerPanel" : "operatorPanel");
+            container.setPadding(dp(14), dp(8), dp(14), dp(8));
+            container.setSaveEnabled(false);
+            if (viewer) container.setBackgroundColor(Color.rgb(235, 240, 231));
+            TextView heading = text(viewer ? "ESPAÑOL · PARA LEER" : "WHIPPLE CHAT · OPERATOR", 14, GREEN);
+            heading.setLetterSpacing(0.08f);
+            if (!viewer) compactOperatorText(heading, 14);
             container.addView(heading);
-            status = text(language == Language.SPANISH ? spanishStatus : englishStatus, 13, MUTED);
+            status = text(viewer ? spanishStatus : englishStatus, viewer ? 24 : 15, viewer ? GREEN : MUTED);
+            status.setTag(viewer ? "viewerStatus" : "operatorStatus");
+            if (!viewer) compactOperatorText(status, 15);
             container.addView(status);
-            scroll.addView(captions);
+            if (viewer) {
+                if (demo) reading.addView(text("EJEMPLO — MICRÓFONO APAGADO", 12, GREEN));
+                TextView instructions = text("Hable despacio y con claridad.\nUna frase breve a la vez.\nEspere la señal del operador.", 22, INK);
+                instructions.setTag("viewerInstructions");
+                reading.addView(instructions);
+                // This is a passive reading surface. All capture, editing and orientation controls belong to the operator.
+                scroll.setFocusable(false);
+                scroll.setFocusableInTouchMode(false);
+                scroll.setClickable(false);
+                scroll.setLongClickable(false);
+                scroll.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+                scroll.setOnTouchListener((view, event) -> true);
+                scroll.setOnGenericMotionListener((view, event) -> true);
+            } else {
+                LinearLayout controls = column();
+                controls.setTag("operatorControls");
+                addOperatorControls(controls);
+                container.addView(controls, new LinearLayout.LayoutParams(-1, -2));
+            }
+            captions.setTag(viewer ? "viewerCaptions" : "operatorCaptions");
+            reading.addView(captions, new LinearLayout.LayoutParams(-1, -2));
+            reading.addView(text(viewer ? "La traducción puede contener errores." : "Translation can make mistakes. Scroll to review both languages.", 11, MUTED));
+            scroll.addView(reading, new ScrollView.LayoutParams(-1, -2));
+            scroll.setContentDescription(viewer ? "Texto para leer en español" : "English operator controls and conversation");
+            if (!viewer) scroll.setOnUserInteraction(() -> {
+                followLatest = false;
+                stopReveal();
+            });
             container.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
-            talk = button(language == Language.SPANISH ? "Hablar español" : "Speak English", () -> speak(language));
-            container.addView(talk, new LinearLayout.LayoutParams(-1, dp(56)));
-            container.addView(text(language == Language.SPANISH
-                    ? "Puede haber errores. Pida aclaración."
-                    : "Translation can make mistakes. Ask for clarification.", 11, MUTED));
+        }
+        void stopReveal() {
+            renderVersion++;
+            if (pendingPosition != null) scroll.removeCallbacks(pendingPosition);
+            if (pendingLayout != null && scroll.getViewTreeObserver().isAlive()) {
+                scroll.getViewTreeObserver().removeOnPreDrawListener(pendingLayout);
+            }
+            pendingPosition = null;
+            pendingLayout = null;
+            for (RevealingTextView view : reveals) view.finishReveal();
+        }
+        RevealingTextView caption(String value, int size, int color) {
+            RevealingTextView view = new RevealingTextView(MainActivity.this);
+            view.setText(value);
+            view.setTextSize(size);
+            view.setTextColor(color);
+            view.setPadding(0, dp(4), 0, dp(4));
+            captions.addView(view, new LinearLayout.LayoutParams(-1, -2));
+            return view;
         }
         void render(List<ConversationLedger.Turn> history) {
+            if (rendered && renderedHistory.equals(history)) return;
+            stopReveal();
+            final int version = renderVersion;
+            rendered = true;
+            renderedHistory = new ArrayList<>(history);
+            reveals.clear();
             captions.removeAllViews();
             if (history.isEmpty()) {
+                followLatest = true;
+                scroll.scrollTo(0, 0);
                 captions.addView(text(language == Language.SPANISH
-                        ? "Hable por turnos, con frases cortas."
-                        : "Take turns speaking in short sentences.", 24, INK));
+                        ? "La traducción aparecerá aquí."
+                        : "English and Spanish captions will appear here. Use the operator controls above.", 24, INK));
                 return;
             }
-            for (ConversationLedger.Turn turn : history) {
+            TextView newestLabel = null;
+            RevealingTextView newestTranslation = null;
+            long newestId = history.get(history.size() - 1).id;
+            List<ConversationLedger.Turn> visibleHistory = language == Language.SPANISH
+                    ? java.util.Collections.singletonList(history.get(history.size() - 1)) : history;
+            for (ConversationLedger.Turn turn : visibleHistory) {
                 String primary = turn.textFor(language);
                 String secondary = turn.textFor(language.other());
-                captions.addView(text(turn.sourceLanguage == language
-                        ? (language == Language.SPANISH ? "Usted dijo" : "You said")
-                        : (language == Language.SPANISH ? "Traducción" : "Translation"), 12, GREEN));
+                TextView label = text(language == Language.SPANISH
+                        ? (turn.sourceLanguage == Language.SPANISH ? "USTED DIJO" : "TRADUCCIÓN PARA USTED")
+                        : (turn.sourceLanguage == Language.ENGLISH ? "English original" : "English translation"), 12, GREEN);
+                captions.addView(label);
                 if (primary == null) primary = turn.translationFailed
-                        ? (language == Language.SPANISH ? "No se pudo traducir. Pida que repita." : "Translation unavailable. Please ask them to repeat.")
+                        ? (language == Language.SPANISH ? "Traducción no disponible. Espere al operador." : "Translation unavailable. Edit the transcript or retry capture.")
                         : (language == Language.SPANISH ? "Traduciendo…" : "Translating…");
-                captions.addView(text(primary, 24, INK));
-                if (secondary != null) captions.addView(text(secondary, 15, MUTED));
+                RevealingTextView primaryView = caption(primary, language == Language.SPANISH ? 30 : 24, INK);
+                RevealingTextView secondaryView = null;
+                if (language == Language.ENGLISH && secondary != null) {
+                    captions.addView(text(turn.sourceLanguage == Language.SPANISH ? "Spanish original" : "Spanish translation", 12, GREEN));
+                    secondaryView = caption(secondary, 20, MUTED);
+                }
+                if (turn.id == newestId) {
+                    newestLabel = label;
+                    if (turn.translation != null && !turn.translationFailed) {
+                        newestTranslation = turn.sourceLanguage == language ? secondaryView : primaryView;
+                        if (newestTranslation != null) reveals.add(newestTranslation);
+                    }
+                }
                 space(captions, 10);
             }
-            scroll.post(() -> scroll.fullScroll(View.FOCUS_DOWN));
+            final TextView anchor = newestLabel;
+            final RevealingTextView translation = newestTranslation;
+            final boolean receiving = history.get(history.size() - 1).sourceLanguage != language;
+            pendingPosition = () -> {
+                pendingPosition = null;
+                if (version != renderVersion || !foreground || !followLatest) return;
+                // Start at the beginning of the newest turn, never the end of a long translation.
+                scroll.scrollTo(0, captions.getTop() + anchor.getTop());
+                if (translation == null) return;
+                translation.startReveal(() -> {
+                    if (version != renderVersion || !followLatest || !foreground || !receiving) return;
+                    int bottom = captions.getTop() + translation.getTop() + translation.revealedLineBottom();
+                    int viewport = scroll.getHeight() - scroll.getPaddingTop() - scroll.getPaddingBottom();
+                    if (viewport > 0 && bottom > scroll.getScrollY() + viewport) {
+                        scroll.scrollTo(0, bottom - viewport);
+                    }
+                });
+            };
+            pendingLayout = () -> {
+                scroll.getViewTreeObserver().removeOnPreDrawListener(pendingLayout);
+                pendingLayout = null;
+                Runnable position = pendingPosition;
+                if (position != null) position.run();
+                return true;
+            };
+            scroll.getViewTreeObserver().addOnPreDrawListener(pendingLayout);
         }
     }
 }

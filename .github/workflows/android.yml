@@ -1,4 +1,4 @@
-name: Android starter checks
+name: Android checks
 on:
   workflow_dispatch:
   push:
@@ -29,10 +29,21 @@ jobs:
       - name: Prepare pinned dependencies
         run: python3 scripts/bootstrap.py
       - name: Build and lint all variants
-        run: sh gradlew :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug :app:assemblePocoRelease :app:lintPocoRelease
+        run: sh gradlew :app:testPocoDebugUnitTest :app:testPocoReleaseUnitTest :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug :app:assemblePocoRelease :app:lintPocoRelease
       - name: Check offline APK permissions
         run: python3 scripts/check_apk_permissions.py --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" app/build/outputs/apk/offline/debug/app-offline-debug.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: tabletalk-debug-apks
+          name: whipple-chat-android-builds
           path: app/build/outputs/apk/**/*.apk
+      - name: Upload Android UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whipple-chat-android-checks
+          path: |
+            app/build/reports/caption-screenshots/
+            app/build/test-results/
+            app/build/reports/tests/
+            app/build/reports/lint-results-*
+          retention-days: 14

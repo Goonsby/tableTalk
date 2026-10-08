@@ -113,7 +113,8 @@ def prepare_sdk():
         repository = ET.fromstring(get("https://dl.google.com/android/repository/repository2-1.xml"))
         for item in repository.iter():
             item.tag = item.tag.rsplit("}", 1)[-1]
-        package = next(p for p in repository.iter("remotePackage") if p.get("path") == "cmdline-tools;latest")
+        # Pin the SDK manager: newer launchers bootstrap an additional CLI.
+        package = next(p for p in repository.iter("remotePackage") if p.get("path") == "cmdline-tools;19.0")
         archive = next(a.find("complete") for a in package.findall("./archives/archive")
                        if a.findtext("host-os") == "linux")
         relative = archive.findtext("url")
@@ -147,6 +148,20 @@ def prepare_sdk():
         subprocess.run(["sh", str(manager), "--sdk_root=" + str(SDK),
                         "platforms;android-35", "build-tools;35.0.0", "ndk;27.2.12479018", "cmake;3.22.1"],
                        env=ENV, stdout=log, stderr=subprocess.STDOUT, check=True)
+    # Some SDK-manager installations leave the archive root nested one level
+    # below the package directory. Gradle requires these files at package root.
+    for relative, archive_root in [("platforms/android-35", "android-35"),
+                                   ("build-tools/35.0.0", "android-15")]:
+        package_dir = SDK / relative
+        nested = package_dir / archive_root
+        if not (package_dir / "source.properties").is_file() and (nested / "source.properties").is_file():
+            for entry in nested.iterdir():
+                destination = package_dir / entry.name
+                if destination.exists():
+                    raise RuntimeError(f"Conflicting SDK package entry: {destination}")
+                shutil.move(str(entry), str(destination))
+        if not (package_dir / "source.properties").is_file():
+            raise RuntimeError(f"Incomplete SDK package: {package_dir}")
     announce("Android SDK and native toolchain prepared.")
 
 
