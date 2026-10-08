@@ -24,7 +24,7 @@ android {
         }
         create("poco") {
             dimension = "network"
-            applicationIdSuffix = ".poco"
+            applicationIdSuffix = providers.gradleProperty("whipplePreviewSuffix").getOrElse(".poco")
             minSdk = 26
             versionCode = 12
             versionName = "0.2.2-whipple-preview"

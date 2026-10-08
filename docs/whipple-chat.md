@@ -27,4 +27,11 @@ The preview's automated visual checks exercise sample text, large type, portrait
 
 Android preview: `0.2.2-whipple-preview`, version code `12`, POCO package `org.tabletalk.poco`. Use the existing private signing key for a compatible update; a fresh CI development key cannot update an earlier installation.
 
+For a separate installation when the original signing key is unavailable, build
+with `-PwhipplePreviewSuffix=.whipplepreview :app:assemblePocoRelease`.
+This produces package `org.tabletalk.whipplepreview`, which installs alongside
+the existing app and requires its own model downloads. Retain the preview's
+private signing key for subsequent preview updates. The default POCO package
+and its update signing requirements are unchanged.
+
 iPhone preview: `0.2.2`, build `3`, bundle `org.tabletalk.ios`. CI produces an unsigned ARM64 device build, a simulator build and native source. Install through Xcode with the owner's Personal Team; no signed IPA or TestFlight distribution is provided. See [iPhone setup and installation](iphone.md).
