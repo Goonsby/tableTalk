@@ -1,5 +1,15 @@
 # TableTalk
 
+## Pocophone F1 edition (0.2.0)
+
+[**Download the POCO F1 APK**](https://github.com/Goonsby/tableTalk/releases/download/v0.2.0-poco/tabletalk-poco.apk). Install it and tap **Download speech + translation models**. One app downloads the models and then transcribes/translates on the phone, including offline. Wi-Fi is the default; mobile data is optional.
+
+This ARM64 build is tuned for the Snapdragon 845, uses multilingual Whisper tiny, and installs alongside the older test app. See the [POCO setup and verification guide](docs/pocophone-f1.md). Device performance and MIUI behavior still need a physical F1 test.
+
+## Original LG prototype (0.1.0)
+
+The following describes the original two-APK distribution; POCO users should follow the guide above.
+
 An Android starter for a pastor and a Spanish-speaking visitor to share one phone across a table. English and Spanish appear together; the Spanish half faces the other person with a 180° rotation.
 
 **Current status:** both signed Android test APKs have been built and passed lint with no errors. The offline APK's permissions, both signatures, ARM64 native libraries, and JNI exports have been verified. The prototype has not been installed or tested on an LG G6/G7 and needs device validation before a visit. See [verification](docs/verification.md).

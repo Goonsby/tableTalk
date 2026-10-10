@@ -25,11 +25,11 @@ jobs:
         run: sh scripts/check_core.sh
       - name: Prepare pinned dependencies
         run: python3 scripts/bootstrap.py
-      - name: Build and lint both variants
-        run: sh gradlew :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug
+      - name: Build and lint all variants
+        run: sh gradlew :app:assembleSetupDebug :app:assembleOfflineDebug :app:lintSetupDebug :app:lintOfflineDebug :app:assemblePocoRelease :app:lintPocoRelease
       - name: Check offline APK permissions
         run: python3 scripts/check_apk_permissions.py --aapt "$ANDROID_HOME/build-tools/35.0.0/aapt" app/build/outputs/apk/offline/debug/app-offline-debug.apk
       - uses: actions/upload-artifact@v4
         with:
           name: tabletalk-debug-apks
-          path: app/build/outputs/apk/*/debug/*.apk
+          path: app/build/outputs/apk/**/*.apk
